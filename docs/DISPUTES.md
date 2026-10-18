@@ -1,6 +1,10 @@
 # Dispute and Chargeback Hook (Design)
 
-Status: design proposal for issue #238. Not yet implemented.
+Status: deferred. Issue #238 was closed as a design-only proposal; the
+ticketing contract does not currently expose an arbiter or dispute entry
+point. This document records the proposed interface for a future, separately
+scoped implementation and must not be read as a description of deployed
+contract behavior.
 
 ## Context
 
@@ -104,12 +108,10 @@ have `release_escrow` transfer only `escrow_balance - disputed_balance`.
   doesn't act within N ledgers) — worth adding once real dispute volume
   shows it's needed.
 
-## Acceptance criteria mapping
+## Proposal status
 
-- "Design an arbiter role" → `Arbiter` global role + `set_arbiter`,
-  `resolve_dispute` above.
-- "Design doc then implementation" → this document; implementation is a
-  follow-up PR once the design is agreed, adding `Dispute`,
-  `DisputeStatus`, the four new errors, and the three new entry points
-  described here, plus tests mirroring the existing `escrow_*` and
-  `purchase_throttle_*` test style in `contracts/ticketing/src/test/`.
+The proposal is intentionally not part of the current contract ABI. A future
+implementation must add `Dispute`, `DisputeStatus`, the proposed errors and
+entry points together with tests before this document is changed to describe
+an active feature. Until then, callers must use the currently documented
+ticket, escrow and refund entry points.
