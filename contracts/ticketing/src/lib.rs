@@ -10,8 +10,8 @@ mod types;
 
 pub use constants::{
     BPS_DENOMINATOR, CATEGORY_CONCERT, CATEGORY_CONFERENCE, CATEGORY_FESTIVAL, CATEGORY_FLIGHT,
-    CATEGORY_OTHER, CATEGORY_SPORTS, MAX_BATCH_SIZE, MAX_CATEGORY_LEN, MAX_NAME_LEN,
-    MAX_TICKET_LABEL_LEN, PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS,
+    CATEGORY_OTHER, CATEGORY_SPORTS, MAX_BATCH_SIZE, MAX_CATEGORY_LEN, MAX_METADATA_URI_LEN,
+    MAX_NAME_LEN, MAX_PAGE_SIZE, MAX_TICKET_LABEL_LEN, PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS,
 };
 use constants::{LEDGER_BUMP, LEDGER_THRESHOLD};
 pub use error::Error;
@@ -298,6 +298,7 @@ impl TicketingContract {
             escrow_release_ledger: 0,
             escrow_balance: 0,
             payment_token: None,
+            transferable: true,
         };
         Self::save_event(&env, event_id, &event);
         env.storage()
@@ -308,7 +309,7 @@ impl TicketingContract {
             LEDGER_THRESHOLD,
             LEDGER_BUMP,
         );
-        Self::increment_organizer_events(&env, &event.organizer);
+        Self::index_organizer_event(&env, &event.organizer, event_id);
         Ok(())
     }
 
@@ -419,6 +420,28 @@ impl TicketingContract {
         Self::payment_token_for_event(&env, &event)
     }
 
+    /// Makes an event's tickets soulbound or transferable (issue #108). When
+    /// `transferable` is false, direct transfers, gift claims, resale listings
+    /// and resale purchases all reject with `NotTransferable`. Only callable
+    /// by the organizer before any ticket is issued, so a buyer never acquires
+    /// a ticket under different terms from the ones they bought it on.
+    pub fn set_event_transferable(
+        env: Env,
+        organizer: Address,
+        event_id: u64,
+        transferable: bool,
+    ) -> Result<(), Error> {
+        Self::extend_instance_ttl(&env);
+        organizer.require_auth();
+        let mut event = Self::require_organizer(&env, event_id, &organizer)?;
+        if event.tickets_issued > 0 {
+            return Err(Error::TicketsAlreadyIssued);
+        }
+        event.transferable = transferable;
+        Self::save_event(&env, event_id, &event);
+        Ok(())
+    }
+
     /// Organizer-authorized issuance for tickets already paid for off-chain
     /// (card payment, comp, or fiat-to-crypto settled by the platform).
     /// Increments the event's monotonic `tickets_issued` counter by 1.
@@ -431,6 +454,24 @@ impl TicketingContract {
         seat: String,
         price: i128,
     ) -> Result<u64, Error> {
+        Self::issue_ticket_with_metadata(env, organizer, event_id, to, tier, seat, price, None)
+    }
+
+    /// Issues a ticket like `issue_ticket` and attaches an optional metadata
+    /// URI at mint (issue #109). The URI is bounded by `MAX_METADATA_URI_LEN`
+    /// and is read back through `token_uri`. Passing `None` mints a ticket
+    /// without one, exactly as `issue_ticket` does.
+    #[allow(clippy::too_many_arguments)]
+    pub fn issue_ticket_with_metadata(
+        env: Env,
+        organizer: Address,
+        event_id: u64,
+        to: Address,
+        tier: String,
+        seat: String,
+        price: i128,
+        metadata_uri: Option<String>,
+    ) -> Result<u64, Error> {
         Self::extend_instance_ttl(&env);
         organizer.require_auth();
         Self::require_initialized(&env)?;
@@ -440,8 +481,14 @@ impl TicketingContract {
         // Issue #126: bound tier/seat so they cannot inflate per-ticket
         // storage cost and rent.
         Self::validate_ticket_labels(&tier, &seat)?;
+        if let Some(uri) = &metadata_uri {
+            Self::validate_label(uri, MAX_METADATA_URI_LEN)?;
+        }
         Self::require_organizer(&env, event_id, &organizer)?;
         let ticket_id = Self::mint(&env, event_id, to, tier, seat, price);
+        if let Some(uri) = &metadata_uri {
+            Self::store_metadata_uri(&env, ticket_id, uri);
+        }
         Self::increment_tickets_issued(&env, event_id, 1);
         Ok(ticket_id)
     }
@@ -627,10 +674,12 @@ impl TicketingContract {
         }
         Self::require_not_terminal(&ticket)?;
         let event = Self::get_event_inner(&env, ticket.event_id)?;
+        Self::ensure_transferable(&event)?;
         Self::ensure_transfer_allowed(&ticket, &event)?;
         if Self::transfer_frozen(&env, &event) {
             return Err(Error::TransfersFrozen);
         }
+        Self::move_owner_balance(&env, &ticket.owner, &to);
         ticket.owner = to;
         ticket.transfers += 1;
         ticket.status = TicketStatus::Valid;
@@ -666,7 +715,9 @@ impl TicketingContract {
             if Self::transfer_frozen(&env, &event) {
                 return Err(Error::TransfersFrozen);
             }
+            Self::ensure_transferable(&event)?;
             Self::ensure_transfer_allowed(&ticket, &event)?;
+            Self::move_owner_balance(&env, &ticket.owner, &to);
             ticket.owner = to.clone();
             ticket.transfers += 1;
             ticket.status = TicketStatus::Valid;
@@ -697,6 +748,8 @@ impl TicketingContract {
             return Err(Error::NotOwner);
         }
         Self::require_not_terminal(&ticket)?;
+        let event = Self::get_event_inner(&env, ticket.event_id)?;
+        Self::ensure_transferable(&event)?;
         if ticket.status == TicketStatus::Resale {
             ticket.status = TicketStatus::Valid;
             ticket.resale_price = 0;
@@ -749,8 +802,10 @@ impl TicketingContract {
         if Self::transfer_frozen(&env, &event) {
             return Err(Error::TransfersFrozen);
         }
+        Self::ensure_transferable(&event)?;
         Self::ensure_transfer_allowed(&ticket, &event)?;
 
+        Self::move_owner_balance(&env, &ticket.owner, &recipient);
         ticket.owner = recipient;
         ticket.transfers += 1;
         ticket.status = TicketStatus::Valid;
@@ -1027,6 +1082,7 @@ impl TicketingContract {
         }
         Self::require_not_terminal(&ticket)?;
         let event = Self::get_event_inner(&env, ticket.event_id)?;
+        Self::ensure_transferable(&event)?;
         if Self::resale_closed(&env, &event) {
             return Err(Error::ResaleClosed);
         }
@@ -1162,6 +1218,7 @@ impl TicketingContract {
         if Self::resale_closed(&env, &event) {
             return Err(Error::ResaleClosed);
         }
+        Self::ensure_transferable(&event)?;
         Self::ensure_transfer_allowed(&ticket, &event)?;
         let token_address = Self::payment_token_for_event(&env, &event)?;
 
@@ -1173,6 +1230,7 @@ impl TicketingContract {
         let royalty = royalty_product / BPS_DENOMINATOR as i128;
         let seller_amount = ticket.resale_price - royalty;
         let seller = ticket.owner.clone();
+        Self::move_owner_balance(&env, &seller, &buyer);
         ticket.owner = buyer.clone();
         ticket.transfers += 1;
         ticket.status = TicketStatus::Valid;
@@ -1257,6 +1315,25 @@ impl TicketingContract {
         env.storage()
             .persistent()
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        // The metadata URI lives under its own key, so keep it alive for as
+        // long as the ticket it describes (issue #109).
+        let uri_key = DataKey::TicketMetadataUri(ticket_id);
+        if env.storage().persistent().has(&uri_key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&uri_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        // The owner's balance counter is shared across that owner's tickets
+        // and only written on ownership changes, so renew it here too. Without
+        // this a holder who keeps a ticket for longer than the TTL would see
+        // SEP-50 `balance` silently drop to zero (issue #110).
+        let owner = Self::get_ticket_inner(env, ticket_id)?.owner;
+        let balance_key = DataKey::OwnerBalance(owner);
+        if env.storage().persistent().has(&balance_key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&balance_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
         Ok(())
     }
 
@@ -1266,6 +1343,66 @@ impl TicketingContract {
             .persistent()
             .get(&DataKey::OrganizerEvents(organizer))
             .unwrap_or(0)
+    }
+
+    /// Returns one page of the event ids registered by `organizer` (issue
+    /// #112). `start` is a zero-based position in the organizer's event list.
+    /// `limit` is clamped to `MAX_PAGE_SIZE`, and an empty list comes back once
+    /// `start` reaches the end.
+    ///
+    /// Events created before this index existed have no slot here, so they are
+    /// skipped; `get_organizer_events` still counts them.
+    pub fn list_organizer_events(env: Env, organizer: Address, start: u32, limit: u32) -> Vec<u64> {
+        let count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::OrganizerEvents(organizer.clone()))
+            .unwrap_or(0);
+        let end = start.saturating_add(limit.min(MAX_PAGE_SIZE)).min(count);
+        let mut event_ids = Vec::new(&env);
+        for index in start..end {
+            let slot = DataKey::OrganizerEventAt(organizer.clone(), index);
+            if let Some(event_id) = env.storage().persistent().get::<_, u64>(&slot) {
+                event_ids.push_back(event_id);
+            }
+        }
+        event_ids
+    }
+
+    /// SEP-50 `owner_of`: the address that currently owns a ticket (issue
+    /// #110). The ticket id is the SEP-50 `TokenID`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::TicketNotFound` when no ticket with `token_id` exists.
+    pub fn owner_of(env: Env, token_id: u64) -> Result<Address, Error> {
+        Ok(Self::get_ticket(env, token_id)?.owner)
+    }
+
+    /// SEP-50 `balance`: how many tickets `owner` holds, in any lifecycle
+    /// status (issue #110). The standard names this function `balance`, not
+    /// `balance_of`. Revoked and used tickets still count, since they are
+    /// still owned.
+    pub fn balance(env: Env, owner: Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::OwnerBalance(owner))
+            .unwrap_or(0)
+    }
+
+    /// SEP-50 `token_uri`: the metadata URI set when the ticket was issued
+    /// (issues #109 and #110).
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::TicketNotFound` when no ticket with `token_id` exists,
+    /// and `Error::MetadataUriNotSet` when it was issued without a URI.
+    pub fn token_uri(env: Env, token_id: u64) -> Result<String, Error> {
+        Self::get_ticket(env.clone(), token_id)?;
+        env.storage()
+            .persistent()
+            .get(&DataKey::TicketMetadataUri(token_id))
+            .ok_or(Error::MetadataUriNotSet)
     }
 
     /// Loads an event and verifies its organizer after the caller has
@@ -1324,12 +1461,66 @@ impl TicketingContract {
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
     }
 
-    fn increment_organizer_events(env: &Env, organizer: &Address) {
+    /// Appends `event_id` to the organizer's paginated event list at the next
+    /// free index, then advances the organizer's event count (issue #112).
+    fn index_organizer_event(env: &Env, organizer: &Address, event_id: u64) {
         let key = DataKey::OrganizerEvents(organizer.clone());
-        let count = env.storage().persistent().get(&key).unwrap_or(0u32);
+        let index: u32 = env.storage().persistent().get(&key).unwrap_or(0u32);
+        let slot = DataKey::OrganizerEventAt(organizer.clone(), index);
+        env.storage().persistent().set(&slot, &event_id);
         env.storage()
             .persistent()
-            .set(&key, &count.saturating_add(1));
+            .extend_ttl(&slot, LEDGER_THRESHOLD, LEDGER_BUMP);
+        env.storage()
+            .persistent()
+            .set(&key, &index.saturating_add(1));
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+    }
+
+    /// Rejects every movement of a ticket on a soulbound event (issue #108).
+    fn ensure_transferable(event: &Event) -> Result<(), Error> {
+        if event.transferable {
+            Ok(())
+        } else {
+            Err(Error::NotTransferable)
+        }
+    }
+
+    /// Records one ticket leaving `from` and one arriving at `to` (issue
+    /// #110). Callers pass the owner as it stood before the change.
+    fn move_owner_balance(env: &Env, from: &Address, to: &Address) {
+        Self::debit_owner_balance(env, from);
+        Self::credit_owner_balance(env, to);
+    }
+
+    fn credit_owner_balance(env: &Env, owner: &Address) {
+        let key = DataKey::OwnerBalance(owner.clone());
+        let current: u64 = env.storage().persistent().get(&key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&key, &current.saturating_add(1));
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+    }
+
+    fn debit_owner_balance(env: &Env, owner: &Address) {
+        let key = DataKey::OwnerBalance(owner.clone());
+        let current: u64 = env.storage().persistent().get(&key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&key, &current.saturating_sub(1));
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+    }
+
+    /// Stores a ticket's metadata URI under its own key (issue #109).
+    fn store_metadata_uri(env: &Env, ticket_id: u64, uri: &String) {
+        let key = DataKey::TicketMetadataUri(ticket_id);
+        env.storage().persistent().set(&key, uri);
         env.storage()
             .persistent()
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
@@ -1495,6 +1686,7 @@ impl TicketingContract {
             transfers: 0,
         };
         Self::save_ticket(env, ticket_id, &ticket);
+        Self::credit_owner_balance(env, &ticket.owner);
         env.storage()
             .instance()
             .set(&DataKey::NextTicketId, &(ticket_id + 1));

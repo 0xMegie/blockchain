@@ -112,6 +112,10 @@ pub struct Event {
     /// initialization. Lockable only while no tickets have been issued so
     /// existing sales stay denominated in the token they were paid in.
     pub payment_token: Option<Address>,
+    /// When false the event is soulbound: tickets cannot be transferred,
+    /// gifted, listed for resale or bought on the resale market (issue #108).
+    /// Defaults to true. Settable only before tickets are issued.
+    pub transferable: bool,
 }
 
 /// A ticket minted for an event.
@@ -222,6 +226,16 @@ pub enum DataKey {
     /// Total outstanding escrow balance across all events (issue #317).
     /// Used to prevent payment token changes while funds are in escrow.
     OutstandingEscrow,
+    /// Event id at a position in an organizer's event list, keyed by the
+    /// organizer and a zero-based index (issue #112). Lets the event list be
+    /// read in pages without loading every event.
+    OrganizerEventAt(Address, u32),
+    /// Optional metadata URI for a ticket, set at issuance (issue #109).
+    /// Stored apart from `Ticket` so tickets without one pay no extra cost.
+    TicketMetadataUri(u64),
+    /// Number of tickets an address owns, regardless of lifecycle status.
+    /// Backs the SEP-50 `balance` read (issue #110).
+    OwnerBalance(Address),
 }
 
 // Keep the persistent encoding beside the public and stored ticket types.
