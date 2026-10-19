@@ -15,6 +15,8 @@ Emitted by `issue_ticket` and `purchase_primary`.
 |---|---|---|
 | `ticket_id` | `u64` | topic |
 | `event_id` | `u64` | |
+| `owner` | `Address` | Ticket owner |
+| `tier` | `String` | Ticket tier name |
 
 ## `TicketCheckedIn`
 

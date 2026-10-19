@@ -1030,12 +1030,16 @@ impl TicketingContract {
         if Self::resale_closed(&env, &event) {
             return Err(Error::ResaleClosed);
         }
-        let cap = ticket.original_price * event.max_resale_multiplier_bps as i128 / 10_000;
+        let cap = Self::calculate_resale_cap(ticket.original_price, event.max_resale_multiplier_bps)?;
         if price > cap {
             return Err(Error::ResalePriceExceedsCap);
         }
         if let Some(floor_bps) = event.min_resale_multiplier_bps {
-            let floor = ticket.original_price * floor_bps as i128 / 10_000;
+            let floor_product = ticket
+                .original_price
+                .checked_mul(floor_bps as i128)
+                .ok_or(Error::MathOverflow)?;
+            let floor = floor_product / 10_000;
             if price < floor {
                 return Err(Error::ResalePriceBelowFloor);
             }
@@ -1045,6 +1049,28 @@ impl TicketingContract {
         Self::remove_gift_claim(&env, ticket_id);
         Self::save_ticket(&env, ticket_id, &ticket);
         Ok(())
+    }
+
+    /// Exposes the resale price cap for a given ticket.
+    ///
+    /// The cap is computed as `original_price * max_resale_multiplier_bps / 10_000`.
+    /// Returns `Error::MathOverflow` if the arithmetic overflows.
+    pub fn get_resale_price_cap(env: Env, ticket_id: u64) -> Result<i128, Error> {
+        Self::extend_instance_ttl(&env);
+        let ticket = Self::get_ticket_inner(&env, ticket_id)?;
+        let event = Self::get_event_inner(&env, ticket.event_id)?;
+        Self::calculate_resale_cap(ticket.original_price, event.max_resale_multiplier_bps)
+    }
+
+    /// Internal helper calculating the resale cap with overflow protection.
+    pub fn calculate_resale_cap(
+        original_price: i128,
+        max_resale_multiplier_bps: u32,
+    ) -> Result<i128, Error> {
+        let product = original_price
+            .checked_mul(max_resale_multiplier_bps as i128)
+            .ok_or(Error::MathOverflow)?;
+        Ok(product / 10_000)
     }
 
     /// Cancels a ticket's resale listing, returning its status to valid.
@@ -1140,7 +1166,11 @@ impl TicketingContract {
         let token_address = Self::payment_token_for_event(&env, &event)?;
 
         // --- effects: settle state before any untrusted external call. ---
-        let royalty = ticket.resale_price * event.royalty_bps as i128 / BPS_DENOMINATOR as i128;
+        let royalty_product = ticket
+            .resale_price
+            .checked_mul(event.royalty_bps as i128)
+            .ok_or(Error::MathOverflow)?;
+        let royalty = royalty_product / BPS_DENOMINATOR as i128;
         let seller_amount = ticket.resale_price - royalty;
         let seller = ticket.owner.clone();
         ticket.owner = buyer.clone();
@@ -1159,6 +1189,32 @@ impl TicketingContract {
             token_client.transfer(&buyer, &seller, &seller_amount);
         }
         Ok(())
+    }
+
+    /// Returns a read-only quote for resale settlement: `(price, royalty, seller_amount)`.
+    ///
+    /// Matches the calculation in `buy_resale` without modifying any state.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::TicketNotFound` if the ticket does not exist.
+    /// Returns `Error::NotForResale` if the ticket is not listed for resale.
+    /// Returns `Error::EventNotFound` if the associated event does not exist.
+    /// Returns `Error::MathOverflow` on arithmetic overflow.
+    pub fn quote_resale(env: Env, ticket_id: u64) -> Result<(i128, i128, i128), Error> {
+        Self::extend_instance_ttl(&env);
+        let ticket = Self::get_ticket_inner(&env, ticket_id)?;
+        if ticket.status != TicketStatus::Resale {
+            return Err(Error::NotForResale);
+        }
+        let event = Self::get_event_inner(&env, ticket.event_id)?;
+        let royalty_product = ticket
+            .resale_price
+            .checked_mul(event.royalty_bps as i128)
+            .ok_or(Error::MathOverflow)?;
+        let royalty = royalty_product / BPS_DENOMINATOR as i128;
+        let seller_amount = ticket.resale_price - royalty;
+        Ok((ticket.resale_price, royalty, seller_amount))
     }
 
     /// Fetches an event by its id. Note that `Event.tickets_issued` is a
@@ -1430,8 +1486,8 @@ impl TicketingContract {
             .unwrap_or(0);
         let ticket = Ticket {
             event_id,
-            owner: to,
-            tier,
+            owner: to.clone(),
+            tier: tier.clone(),
             seat,
             status: TicketStatus::Valid,
             original_price: price,
@@ -1445,6 +1501,8 @@ impl TicketingContract {
         TicketIssued {
             ticket_id,
             event_id,
+            owner: to,
+            tier,
         }
         .publish(env);
         ticket_id

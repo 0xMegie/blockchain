@@ -75,7 +75,7 @@ fn enable_escrow_refreshes_the_event_ttl() {
         "precondition: the event is due a refresh"
     );
 
-    client.enable_escrow(&organizer, &1, &500u32);
+    client.enable_escrow(&organizer, &1, &(STALE + 500));
 
     assert!(
         event_ttl(&env, &client, 1) > LEDGER_THRESHOLD,

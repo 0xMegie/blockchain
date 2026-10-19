@@ -36,4 +36,5 @@ fn public_types_keep_their_crate_root_paths_and_ticket_encoding() {
     assert_eq!(Error::NotOrganizer as u32, 6);
     assert_eq!(Error::AlreadyUsed as u32, 8);
     assert_eq!(Error::Revoked as u32, 9);
+    assert_eq!(Error::MathOverflow as u32, 45);
 }
