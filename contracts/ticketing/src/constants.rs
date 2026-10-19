@@ -20,6 +20,10 @@ pub const PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS: u32 = 17_280;
 /// Basis-point denominator: 10_000 bps == 100%.
 pub const BPS_DENOMINATOR: u32 = 10_000;
 
+/// Seconds after an event's `starts_at` before its used tickets may be burned
+/// (issue #113). Thirty days.
+pub const USED_TICKET_RETENTION_SECONDS: u64 = 30 * 24 * 60 * 60;
+
 /// Maximum accepted length, in bytes, for the event `name` (Issue #125).
 pub const MAX_NAME_LEN: u32 = 64;
 

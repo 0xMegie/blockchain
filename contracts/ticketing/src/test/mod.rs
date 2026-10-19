@@ -16,6 +16,7 @@ use soroban_sdk::{
 mod auth;
 mod auth_matrix;
 mod budget;
+mod burn_used;
 mod event_labels;
 mod events;
 mod guards;

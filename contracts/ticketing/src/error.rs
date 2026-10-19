@@ -103,4 +103,8 @@ pub enum Error {
     NotTransferable = 46,
     /// The ticket was issued without a metadata URI (Issue #109).
     MetadataUriNotSet = 47,
+    /// The ticket has not been checked in, so it cannot be burned (issue #113).
+    TicketNotUsed = 48,
+    /// The used ticket's retention period has not elapsed yet (issue #113).
+    RetentionPeriodNotElapsed = 49,
 }

@@ -12,6 +12,7 @@ pub use constants::{
     BPS_DENOMINATOR, CATEGORY_CONCERT, CATEGORY_CONFERENCE, CATEGORY_FESTIVAL, CATEGORY_FLIGHT,
     CATEGORY_OTHER, CATEGORY_SPORTS, MAX_BATCH_SIZE, MAX_CATEGORY_LEN, MAX_METADATA_URI_LEN,
     MAX_NAME_LEN, MAX_PAGE_SIZE, MAX_TICKET_LABEL_LEN, PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS,
+    USED_TICKET_RETENTION_SECONDS,
 };
 use constants::{LEDGER_BUMP, LEDGER_THRESHOLD};
 pub use error::Error;
@@ -1070,6 +1071,40 @@ impl TicketingContract {
             Self::remove_gift_claim(&env, ticket_id);
             Self::save_ticket(&env, ticket_id, &ticket);
         }
+        Ok(())
+    }
+
+    /// Permanently deletes a used ticket's record once its retention period has
+    /// passed (issue #113). The period ends `USED_TICKET_RETENTION_SECONDS`
+    /// after the event's `starts_at`. Only the event's organizer may burn, and
+    /// only a ticket with `TicketStatus::Used`. Afterwards the ticket reads as
+    /// `TicketNotFound`. `Event.tickets_issued` and `total_tickets` still count
+    /// it, since both only grow.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Error::TicketNotUsed` if the ticket has not been checked in.
+    /// Returns `Error::RetentionPeriodNotElapsed` before the retention period ends.
+    pub fn burn_used_ticket(env: Env, organizer: Address, ticket_id: u64) -> Result<(), Error> {
+        Self::extend_instance_ttl(&env);
+        organizer.require_auth();
+        let ticket = Self::get_ticket_inner(&env, ticket_id)?;
+        let event = Self::require_organizer(&env, ticket.event_id, &organizer)?;
+        if ticket.status != TicketStatus::Used {
+            return Err(Error::TicketNotUsed);
+        }
+        let burnable_from = event.starts_at.saturating_add(USED_TICKET_RETENTION_SECONDS);
+        if env.ledger().timestamp() < burnable_from {
+            return Err(Error::RetentionPeriodNotElapsed);
+        }
+        Self::debit_owner_balance(&env, &ticket.owner);
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Ticket(ticket_id));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::TicketMetadataUri(ticket_id));
+        Self::remove_gift_claim(&env, ticket_id);
         Ok(())
     }
 

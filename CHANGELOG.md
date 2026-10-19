@@ -18,6 +18,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/).
   for the dependency versioning policy and upgrade procedure.
 
 ### Added
+- `burn_used_ticket(organizer, ticket_id)` deletes a checked-in ticket's record
+  (and metadata URI) once `starts_at + USED_TICKET_RETENTION_SECONDS` (30 days)
+  has passed. Revoked or unused tickets are rejected with `TicketNotUsed`, and
+  early calls with `RetentionPeriodNotElapsed` (new codes 48 and 49) (#113).
 - `TicketTransferred` event (`ticket_id` topic, `from`, `to`) published by
   `transfer_ticket`. Batch transfers, gift claims and resale purchases do not
   publish it yet (#115).

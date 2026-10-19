@@ -42,6 +42,7 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `check_in(organizer, ticket_id)` | `organizer` | Marks one ticket used. |
 | `check_in_batch(organizer, ticket_ids)` | `organizer` | Atomically marks a bounded batch of tickets used. |
 | `revoke_ticket(organizer, ticket_id)` | `organizer` | Permanently revokes one ticket. |
+| `burn_used_ticket(organizer, ticket_id)` | `organizer` | Deletes a checked-in ticket's record once `starts_at + USED_TICKET_RETENTION_SECONDS` (30 days) has passed (issue #113). |
 | `set_seat(organizer, ticket_id, seat)` | `organizer` | Reassigns a ticket's seat before transfer/check-in restrictions apply. |
 | `revoke_with_refund(organizer, ticket_id, refund)` | `organizer` | Revokes a ticket and optionally refunds its original price. |
 | `revoke_batch(organizer, ticket_ids)` | `organizer` | Atomically revokes a bounded batch of tickets. |
