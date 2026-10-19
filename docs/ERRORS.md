@@ -74,20 +74,22 @@ diagnostic transaction.
 | 43 | `InvalidTicketLifecycle` | A stored ticket lifecycle word contains an unknown status code |
 | 44 | `SamePaymentToken` | The proposed payment token is the same as the currently active one |
 | 45 | `MathOverflow` | Arithmetic overflow in financial calculation (resale cap or royalty calculation) |
+| 46 | `NotTransferable` | The event is soulbound (issue #108), so `transfer_ticket`, `transfer_batch`, `create_gift_claim`, `claim_gift`, `list_for_resale` or `buy_resale` cannot move its tickets |
+| 47 | `MetadataUriNotSet` | `token_uri` was called for a ticket issued without a metadata URI (issue #109) |
 
 ### Grouping
 
 | Group | Codes | Shared property |
 |---|---|---|
 | Initialization & ordering | 1, 2, 4, 18, 30, 31, 32 | Initialization, idempotency and sequencing constraints — rejected without touching ticket state |
-| Lookup | 3, 5 | The referenced record does not exist in persistent storage |
+| Lookup | 3, 5, 47 | The referenced record does not exist in persistent storage |
 | Authorization | 6, 7, 17, 41 | The signer is authenticated but lacks the required role for the record |
 | Ticket state machine | 8, 9, 10, 33, 39, 40, 42, 43 | The ticket's `status` or transfer counter forbids the action, or the transfer/purchase is a no-op on the current owner |
-| Policy, pricing & timing | 11, 12, 13, 19, 20, 21, 22, 34, 35, 36 | Organizer-configured or time-based policy rejects the arguments |
+| Policy, pricing & timing | 11, 12, 13, 19, 20, 21, 22, 34, 35, 36, 46 | Organizer-configured or time-based policy rejects the arguments |
 | Gift claims | 23, 24, 25, 26 | The claim link is missing, expired, or the preimage does not match |
 | Batching | 27, 28 | `Vec` arity is outside `1..=MAX_BATCH_SIZE` |
 | Input bounds | 37, 38 | A `name`/`category`/`tier`/`seat` label is empty or longer than its byte budget |
-| Escrow, throttle & token config | 14, 15, 16, 29 | Escrow release, purchase throttle, and payment-token validation |
+| Escrow, throttle & token config | 14, 15, 16, 29, 44 | Escrow release, purchase throttle, and payment-token validation |
 
 ## Which entry points return which error
 
@@ -118,14 +120,19 @@ are reachable from a "not found" or a role check.
 | `set_event_payment_token` | 3, 6, 29, 32 |
 | `event_payment_token` | 2, 3 |
 | `issue_ticket` | 3, 6, 12 |
+| `issue_ticket_with_metadata` | 3, 6, 12, 37, 38 |
+| `set_event_transferable` | 3, 6, 32 |
 | `purchase_primary` | 2, 3, 16, 35 |
 | `release_escrow` | 2, 3, 6, 14, 15 |
 | `set_purchase_throttle` | 2, 17 |
-| `transfer_ticket` | 3, 5, 7, 8, 9, 20, 33 |
-| `transfer_batch` | 3, 5, 7, 8, 9, 20, 27, 28, 33 |
-| `create_gift_claim` | 5, 7, 8, 9, 26 |
-| `claim_gift` | 3, 5, 7, 8, 9, 20, 23, 24, 25, 33 |
+| `transfer_ticket` | 3, 5, 7, 8, 9, 20, 33, 46 |
+| `transfer_batch` | 3, 5, 7, 8, 9, 20, 27, 28, 33, 46 |
+| `create_gift_claim` | 3, 5, 7, 8, 9, 26, 46 |
+| `claim_gift` | 3, 5, 7, 8, 9, 20, 23, 24, 25, 33, 46 |
 | `get_ticket` / `verify_ticket` (deprecated) | 5 |
+| `token_uri` | 5, 47 |
+| `owner_of` | 5 |
+| `balance`, `list_organizer_events` | none |
 | `is_ticket_valid` | 2, 5, 43 |
 | `is_valid` | none (lookup errors return `false`) |
 | `verify_tickets` | 5, 27, 28 |
@@ -135,9 +142,9 @@ are reachable from a "not found" or a role check.
 | `set_seat` | 3, 5, 6, 9 |
 | `revoke_with_refund` | 2, 3, 5, 6, 8, 9 |
 | `revoke_batch` | 3, 5, 6, 9, 27, 28 |
-| `list_for_resale` | 3, 5, 7, 8, 9, 11, 12, 21, 34 |
+| `list_for_resale` | 3, 5, 7, 8, 9, 11, 12, 21, 34, 46 |
 | `cancel_resale` | 5, 7, 10 |
-| `buy_resale` | 2, 3, 5, 10, 21, 33 |
+| `buy_resale` | 2, 3, 5, 10, 21, 33, 46 |
 | `get_event` | 3 |
 | `get_ticket` | 5 |
 | `token_decimals` | 2 |
@@ -157,7 +164,7 @@ condition is **permanent** or **time/balance dependent**:
 
 | Class | Codes | Retry strategy |
 |---|---|---|
-| Permanent — fix the request | 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 17, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43 | Do not retry automatically; return a 4xx-equivalent to the caller |
+| Permanent — fix the request | 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 17, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47 | Do not retry automatically; return a 4xx-equivalent to the caller |
 | Time-dependent — retry after waiting | 15, 16, 20, 21, 31 | Retry when the relevant timestamp or ledger sequence has passed |
 | Transient operational | 1, 2, 14, 18 | Deployment or configuration error; retrying the same arguments will not help |
 

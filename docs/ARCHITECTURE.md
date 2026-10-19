@@ -54,10 +54,12 @@ Persistent storage (per-entry TTL, extended on write)
 │   ├── escrow_enabled: bool
 │   ├── escrow_release_ledger: u32
 │   ├── escrow_balance: i128
-│   └── payment_token: Option<Address>
+│   ├── payment_token: Option<Address>
+│   └── transferable: bool (false = soulbound)
 │
 ├── TicketsIssued(u64)             → u64 (per-event counter, separate to avoid Event rewrite)
 ├── OrganizerEvents(Address)       → u32
+├── OrganizerEventAt(Address, u32) → u64 (paginated organizer event list)
 ├── Ticket(u64)                    → Ticket
 │   ├── event_id: u64
 │   ├── owner: Address
@@ -71,7 +73,9 @@ Persistent storage (per-entry TTL, extended on write)
 │   ├── from: Address
 │   ├── secret_hash: BytesN<32>
 │   └── expires_at: u64
-└── LastPurchaseLedger(Address)    → u32 (for purchase throttle)
+├── LastPurchaseLedger(Address)    → u32 (for purchase throttle)
+├── TicketMetadataUri(u64)         → String (optional, set at issuance)
+└── OwnerBalance(Address)          → u64 (tickets held, backs SEP-50 `balance`)
 ```
 
 ### Why persistent storage for events and tickets

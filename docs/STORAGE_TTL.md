@@ -61,6 +61,9 @@ constraint here.
 | Persistent | `Ticket(id)` | every write, via `save_ticket` | — |
 | Persistent | `GiftClaim(id)` | `create_gift_claim` | — (removed on claim, transfer, check-in or revoke, which is the intended disposal) |
 | Persistent | `LastPurchaseLedger(buyer)` | `record_purchase` | never removed; expires with the buyer's inactivity |
+| Persistent | `OrganizerEventAt(organizer, index)` | `create_event`, `create_event_with_options` (written once per event) | never removed; read by `list_organizer_events` |
+| Persistent | `TicketMetadataUri(id)` | `issue_ticket_with_metadata` (only when a URI is supplied) | — (renewed with its ticket by `extend_ticket_ttl`, and absent for tickets without a URI) |
+| Persistent | `OwnerBalance(owner)` | every mint and ownership change; `extend_ticket_ttl` renews the owner's counter | — (a holder whose tickets are never renewed or moved lets the counter lapse, so `balance` then reads 0; see [SEP50.md](SEP50.md)) |
 
 Two structural notes:
 

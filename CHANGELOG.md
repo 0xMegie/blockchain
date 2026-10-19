@@ -18,6 +18,20 @@ This project follows [Keep a Changelog](https://keepachangelog.com/).
   for the dependency versioning policy and upgrade procedure.
 
 ### Added
+- Optional ticket metadata URI set at issuance through
+  `issue_ticket_with_metadata`, bounded by `MAX_METADATA_URI_LEN` (256 bytes),
+  and read back through `token_uri`. `issue_ticket` keeps its signature and
+  mints a ticket without a URI (#109).
+- Soulbound events: `set_event_transferable(organizer, event_id, false)` makes
+  an event's tickets non-transferable across direct transfers, batch transfers,
+  gift claims and resale. The setting is locked once a ticket is issued. New
+  error `NotTransferable` (#108).
+- Paginated organizer event listing `list_organizer_events(organizer, start,
+  limit)`, with `limit` clamped to `MAX_PAGE_SIZE` (50) (#112).
+- SEP-50 read functions `owner_of`, `balance` and `token_uri`, backed by a
+  per-owner ticket counter. The SEP-50 review, with its gaps, is in
+  [docs/SEP50.md](docs/SEP50.md) (#110). The issue asked for `balance_of`, but
+  SEP-50 names the function `balance`, so the contract follows the standard.
 - Status-only scanner query `is_ticket_valid(ticket_id) -> Result<bool, Error>`
   with lifecycle, authorization-free read, and TTL tests. The existing
   owner-aware `is_valid(ticket_id, owner)` ABI is preserved (#350).
