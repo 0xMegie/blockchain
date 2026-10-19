@@ -119,6 +119,34 @@ fn payment_token_propose_and_apply_flow() {
     client.apply_payment_token(&admin);
 }
 
+/// Issue #328: applying the token exactly one ledger before `apply_after_ledger`
+/// must return `TimelockNotElapsed`; applying at `apply_after_ledger` must succeed.
+#[test]
+fn apply_payment_token_rejects_one_ledger_early() {
+    let (env, client, _token, _token_asset, admin, _organizer) = setup();
+
+    let new_token_addr = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
+
+    // Propose at ledger 0; apply_after_ledger = PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS.
+    client.propose_payment_token(&admin, &new_token_addr);
+    let apply_after = PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS;
+
+    // One ledger before the deadline — must be rejected.
+    env.ledger().set_sequence_number(apply_after - 1);
+    let early = client.try_apply_payment_token(&admin);
+    assert_eq!(
+        early,
+        Err(Ok(Error::TimelockNotElapsed)),
+        "applying one ledger early must return TimelockNotElapsed"
+    );
+
+    // Exactly at the deadline — must succeed.
+    env.ledger().set_sequence_number(apply_after);
+    client.apply_payment_token(&admin);
+}
+
 #[test]
 fn apply_payment_token_rejects_without_proposal() {
     let (env, client, _token, _token_asset, admin, _organizer) = setup();

@@ -550,6 +550,45 @@ fn direct_transfer_freezes_at_configured_window() {
     assert_eq!(frozen, Err(Ok(Error::TransfersFrozen)));
 }
 
+/// Issue #329: `transfer_frozen` uses `>=`, so the freeze must activate at
+/// exactly `starts_at - transfer_freeze_seconds`, not one tick later.
+/// Dedicated test for the two boundary ticks.
+#[test]
+fn transfer_frozen_exact_boundary_timestamps() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    // make_event: starts_at = 10_000, transfer_freeze_seconds = 100
+    // freeze_start = 10_000 - 100 = 9_900
+    make_event(&env, &client, &organizer, 1);
+    let owner = Address::generate(&env);
+    let other = Address::generate(&env);
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &owner,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+        &1_000i128,
+    );
+
+    // freeze_start - 1 = 9_899: transfer must be allowed.
+    env.ledger().set_timestamp(9_899);
+    client.transfer_ticket(&owner, &ticket_id, &other);
+    assert_eq!(
+        client.get_ticket(&ticket_id).owner,
+        other,
+        "transfer must be allowed one tick before freeze_start"
+    );
+
+    // freeze_start = 9_900: transfer must be blocked.
+    env.ledger().set_timestamp(9_900);
+    let result = client.try_transfer_ticket(&other, &ticket_id, &owner);
+    assert_eq!(
+        result,
+        Err(Ok(Error::TransfersFrozen)),
+        "transfer must be blocked at freeze_start (>=)"
+    );
+}
+
 #[test]
 fn transfer_frozen_handles_freeze_longer_than_event_lead_time() {
     let (env, client, _token, _token_asset, _admin, organizer) = setup();
@@ -694,6 +733,65 @@ fn gift_claim_rejects_wrong_secret_and_expired_claim() {
     env.ledger().set_timestamp(5_000);
     let expired = client.try_claim_gift(&recipient, &ticket_id, &secret_bytes);
     assert_eq!(expired, Err(Ok(Error::GiftClaimExpired)));
+}
+
+/// Issue #330: `claim_gift` rejects when `timestamp >= expires_at`.
+/// Test the two boundary timestamps: one tick before expiry (must succeed)
+/// and exactly at expiry (must fail).
+#[test]
+fn claim_gift_exact_expiry_boundary() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let owner = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &owner,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+        &1_000i128,
+    );
+
+    let secret_bytes = Bytes::from_array(&env, &[77u8; 32]);
+    let secret_hash = env.crypto().sha256(&secret_bytes).to_bytes();
+    let expires_at: u64 = 8_000;
+
+    client.create_gift_claim(&owner, &ticket_id, &secret_hash, &expires_at);
+
+    // One tick before expiry — claim must succeed.
+    env.ledger().set_timestamp(expires_at - 1);
+    client.claim_gift(&recipient, &ticket_id, &secret_bytes);
+    assert_eq!(client.get_ticket(&ticket_id).owner, recipient);
+}
+
+/// Issue #330 (fail side): claim at the exact expiry timestamp must be rejected.
+#[test]
+fn claim_gift_rejects_at_exact_expiry_timestamp() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let owner = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &owner,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+        &1_000i128,
+    );
+
+    let secret_bytes = Bytes::from_array(&env, &[77u8; 32]);
+    let secret_hash = env.crypto().sha256(&secret_bytes).to_bytes();
+    let expires_at: u64 = 8_000;
+
+    client.create_gift_claim(&owner, &ticket_id, &secret_hash, &expires_at);
+
+    env.ledger().set_timestamp(expires_at);
+    let result = client.try_claim_gift(&recipient, &ticket_id, &secret_bytes);
+    assert_eq!(result, Err(Ok(Error::GiftClaimExpired)));
 }
 
 #[test]
