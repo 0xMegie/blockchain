@@ -236,6 +236,15 @@ pub enum DataKey {
     /// Number of tickets an address owns, regardless of lifecycle status.
     /// Backs the SEP-50 `balance` read (issue #110).
     OwnerBalance(Address),
+    /// Number of tickets in an owner's ticket index (issue #111). Tracked
+    /// apart from `OwnerBalance` so index positions never depend on that
+    /// counter's value.
+    OwnerTicketCount(Address),
+    /// Ticket id at a position in an owner's ticket index (issue #111).
+    OwnerTicketAt(Address, u32),
+    /// Position of a ticket inside its owner's index, so a transfer or burn can
+    /// remove it in constant time (issue #111).
+    TicketOwnerPos(u64),
 }
 
 // Keep the persistent encoding beside the public and stored ticket types.

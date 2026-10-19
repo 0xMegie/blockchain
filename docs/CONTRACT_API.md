@@ -59,6 +59,7 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `extend_ticket_ttl(ticket_id)` | anyone | Renews a ticket's persistent-storage TTL; does not change ticket state. |
 | `get_organizer_events(organizer)` | anyone | Returns the number of events registered by an organizer. |
 | `list_organizer_events(organizer, start, limit)` | anyone | Returns one page of an organizer's event ids; `limit` is clamped to 50 (issue #112). Events created before this index existed are skipped. |
+| `tickets_of(owner, start, limit)` | anyone | Returns one page of the ticket ids an address holds, in any status (issue #111). `limit` is clamped to 50. Order is not chronological, since removals move the last entry into the freed slot. Use `balance(owner)` for the count; the issue's `balance_of` name is not added, per the SEP-50 decision above. |
 | `total_tickets()` | anyone | Returns the number of tickets ever issued across all events (issue #114). Never decreases, including for revoked, used or burned tickets. |
 | `token_decimals()` | anyone | Returns decimals cached for the active payment token. |
 

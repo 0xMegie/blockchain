@@ -24,6 +24,7 @@ pub mod helpers;
 mod metadata;
 mod organizer_allowlist;
 mod organizer_listing;
+mod owner_index;
 mod proptests;
 mod resale;
 mod resale_multiplier;

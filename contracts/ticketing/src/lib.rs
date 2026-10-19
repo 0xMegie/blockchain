@@ -681,7 +681,7 @@ impl TicketingContract {
         if Self::transfer_frozen(&env, &event) {
             return Err(Error::TransfersFrozen);
         }
-        Self::move_owner_balance(&env, &ticket.owner, &to);
+        Self::move_owner_balance(&env, ticket_id, &ticket.owner, &to);
         ticket.owner = to.clone();
         ticket.transfers += 1;
         ticket.status = TicketStatus::Valid;
@@ -727,7 +727,7 @@ impl TicketingContract {
             }
             Self::ensure_transferable(&event)?;
             Self::ensure_transfer_allowed(&ticket, &event)?;
-            Self::move_owner_balance(&env, &ticket.owner, &to);
+            Self::move_owner_balance(&env, ticket_id, &ticket.owner, &to);
             ticket.owner = to.clone();
             ticket.transfers += 1;
             ticket.status = TicketStatus::Valid;
@@ -815,7 +815,7 @@ impl TicketingContract {
         Self::ensure_transferable(&event)?;
         Self::ensure_transfer_allowed(&ticket, &event)?;
 
-        Self::move_owner_balance(&env, &ticket.owner, &recipient);
+        Self::move_owner_balance(&env, ticket_id, &ticket.owner, &recipient);
         ticket.owner = recipient;
         ticket.transfers += 1;
         ticket.status = TicketStatus::Valid;
@@ -1098,6 +1098,7 @@ impl TicketingContract {
             return Err(Error::RetentionPeriodNotElapsed);
         }
         Self::debit_owner_balance(&env, &ticket.owner);
+        Self::remove_from_owner_index(&env, &ticket.owner, ticket_id);
         env.storage()
             .persistent()
             .remove(&DataKey::Ticket(ticket_id));
@@ -1278,7 +1279,7 @@ impl TicketingContract {
         let royalty = royalty_product / BPS_DENOMINATOR as i128;
         let seller_amount = ticket.resale_price - royalty;
         let seller = ticket.owner.clone();
-        Self::move_owner_balance(&env, &seller, &buyer);
+        Self::move_owner_balance(&env, ticket_id, &seller, &buyer);
         ticket.owner = buyer.clone();
         ticket.transfers += 1;
         ticket.status = TicketStatus::Valid;
@@ -1376,6 +1377,26 @@ impl TicketingContract {
         // this a holder who keeps a ticket for longer than the TTL would see
         // SEP-50 `balance` silently drop to zero (issue #110).
         let owner = Self::get_ticket_inner(env, ticket_id)?.owner;
+        // The owner's ticket index (issue #111) is renewed alongside the
+        // balance: its length and this ticket's position and slot.
+        let count_key = DataKey::OwnerTicketCount(owner.clone());
+        if env.storage().persistent().has(&count_key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&count_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+        let pos_key = DataKey::TicketOwnerPos(ticket_id);
+        if let Some(pos) = env.storage().persistent().get::<_, u32>(&pos_key) {
+            env.storage()
+                .persistent()
+                .extend_ttl(&pos_key, LEDGER_THRESHOLD, LEDGER_BUMP);
+            let slot = DataKey::OwnerTicketAt(owner.clone(), pos);
+            if env.storage().persistent().has(&slot) {
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&slot, LEDGER_THRESHOLD, LEDGER_BUMP);
+            }
+        }
         let balance_key = DataKey::OwnerBalance(owner);
         if env.storage().persistent().has(&balance_key) {
             env.storage()
@@ -1383,6 +1404,28 @@ impl TicketingContract {
                 .extend_ttl(&balance_key, LEDGER_THRESHOLD, LEDGER_BUMP);
         }
         Ok(())
+    }
+
+    /// Returns one page of the ticket ids `owner` holds, in any lifecycle
+    /// status (issue #111). `start` is a zero-based position in the owner's
+    /// list, `limit` is clamped to `MAX_PAGE_SIZE`, and an empty list comes
+    /// back once `start` reaches the end. The order is not chronological: a
+    /// transfer or burn moves the last entry into the freed slot.
+    pub fn tickets_of(env: Env, owner: Address, start: u32, limit: u32) -> Vec<u64> {
+        let count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::OwnerTicketCount(owner.clone()))
+            .unwrap_or(0);
+        let end = start.saturating_add(limit.min(MAX_PAGE_SIZE)).min(count);
+        let mut ticket_ids = Vec::new(&env);
+        for index in start..end {
+            let slot = DataKey::OwnerTicketAt(owner.clone(), index);
+            if let Some(ticket_id) = env.storage().persistent().get::<_, u64>(&slot) {
+                ticket_ids.push_back(ticket_id);
+            }
+        }
+        ticket_ids
     }
 
     /// Returns the number of events registered by `organizer`.
@@ -1551,9 +1594,69 @@ impl TicketingContract {
 
     /// Records one ticket leaving `from` and one arriving at `to` (issue
     /// #110). Callers pass the owner as it stood before the change.
-    fn move_owner_balance(env: &Env, from: &Address, to: &Address) {
+    fn move_owner_balance(env: &Env, ticket_id: u64, from: &Address, to: &Address) {
         Self::debit_owner_balance(env, from);
         Self::credit_owner_balance(env, to);
+        Self::remove_from_owner_index(env, from, ticket_id);
+        Self::add_to_owner_index(env, to, ticket_id);
+    }
+
+    /// Appends a ticket to its owner's index at the next free slot (issue #111).
+    fn add_to_owner_index(env: &Env, owner: &Address, ticket_id: u64) {
+        let count_key = DataKey::OwnerTicketCount(owner.clone());
+        let index: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        let slot = DataKey::OwnerTicketAt(owner.clone(), index);
+        let pos_key = DataKey::TicketOwnerPos(ticket_id);
+        env.storage().persistent().set(&slot, &ticket_id);
+        env.storage().persistent().set(&pos_key, &index);
+        env.storage()
+            .persistent()
+            .set(&count_key, &index.saturating_add(1));
+        for key in [slot, pos_key, count_key] {
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
+        }
+    }
+
+    /// Removes a ticket from its owner's index by moving the owner's last
+    /// entry into the freed slot, so the list stays dense (issue #111). A
+    /// ticket with no position entry is skipped, since that entry expired.
+    fn remove_from_owner_index(env: &Env, owner: &Address, ticket_id: u64) {
+        let pos_key = DataKey::TicketOwnerPos(ticket_id);
+        let pos: u32 = match env.storage().persistent().get(&pos_key) {
+            Some(pos) => pos,
+            None => return,
+        };
+        let count_key = DataKey::OwnerTicketCount(owner.clone());
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        if count == 0 {
+            return;
+        }
+        let last = count - 1;
+        if pos != last {
+            let last_slot = DataKey::OwnerTicketAt(owner.clone(), last);
+            if let Some(moved_id) = env.storage().persistent().get::<_, u64>(&last_slot) {
+                let slot = DataKey::OwnerTicketAt(owner.clone(), pos);
+                env.storage().persistent().set(&slot, &moved_id);
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&slot, LEDGER_THRESHOLD, LEDGER_BUMP);
+                let moved_pos = DataKey::TicketOwnerPos(moved_id);
+                env.storage().persistent().set(&moved_pos, &pos);
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&moved_pos, LEDGER_THRESHOLD, LEDGER_BUMP);
+            }
+        }
+        env.storage()
+            .persistent()
+            .remove(&DataKey::OwnerTicketAt(owner.clone(), last));
+        env.storage().persistent().remove(&pos_key);
+        env.storage().persistent().set(&count_key, &last);
+        env.storage()
+            .persistent()
+            .extend_ttl(&count_key, LEDGER_THRESHOLD, LEDGER_BUMP);
     }
 
     fn credit_owner_balance(env: &Env, owner: &Address) {
@@ -1748,6 +1851,7 @@ impl TicketingContract {
         };
         Self::save_ticket(env, ticket_id, &ticket);
         Self::credit_owner_balance(env, &ticket.owner);
+        Self::add_to_owner_index(env, &ticket.owner, ticket_id);
         env.storage()
             .instance()
             .set(&DataKey::NextTicketId, &(ticket_id + 1));
