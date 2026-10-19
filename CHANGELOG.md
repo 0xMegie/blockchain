@@ -18,6 +18,19 @@ This project follows [Keep a Changelog](https://keepachangelog.com/).
   for the dependency versioning policy and upgrade procedure.
 
 ### Added
+- `tickets_of(owner, start, limit)` pages through the ticket ids an address
+  holds, with `limit` clamped to `MAX_PAGE_SIZE`. The index is kept current on
+  mint, direct and batch transfers, gift claims, resale purchases and burns
+  (#111). Count with `balance`, as the SEP-50 decision above describes.
+- `burn_used_ticket(organizer, ticket_id)` deletes a checked-in ticket's record
+  (and metadata URI) once `starts_at + USED_TICKET_RETENTION_SECONDS` (30 days)
+  has passed. Revoked or unused tickets are rejected with `TicketNotUsed`, and
+  early calls with `RetentionPeriodNotElapsed` (new codes 48 and 49) (#113).
+- `TicketTransferred` event (`ticket_id` topic, `from`, `to`) published by
+  `transfer_ticket`. Batch transfers, gift claims and resale purchases do not
+  publish it yet (#115).
+- `total_tickets()` returns the number of tickets ever issued across all
+  events. It only grows, so revoked, used and burned tickets still count (#114).
 - Optional ticket metadata URI set at issuance through
   `issue_ticket_with_metadata`, bounded by `MAX_METADATA_URI_LEN` (256 bytes),
   and read back through `token_uri`. `issue_ticket` keeps its signature and

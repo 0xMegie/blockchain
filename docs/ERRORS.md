@@ -76,6 +76,8 @@ diagnostic transaction.
 | 45 | `MathOverflow` | Arithmetic overflow in financial calculation (resale cap or royalty calculation) |
 | 46 | `NotTransferable` | The event is soulbound (issue #108), so `transfer_ticket`, `transfer_batch`, `create_gift_claim`, `claim_gift`, `list_for_resale` or `buy_resale` cannot move its tickets |
 | 47 | `MetadataUriNotSet` | `token_uri` was called for a ticket issued without a metadata URI (issue #109) |
+| 48 | `TicketNotUsed` | `burn_used_ticket` was called for a ticket that has not been checked in, or that was revoked (issue #113) |
+| 49 | `RetentionPeriodNotElapsed` | `burn_used_ticket` was called before `starts_at + USED_TICKET_RETENTION_SECONDS` (issue #113) |
 
 ### Grouping
 
@@ -145,6 +147,7 @@ are reachable from a "not found" or a role check.
 | `list_for_resale` | 3, 5, 7, 8, 9, 11, 12, 21, 34, 46 |
 | `cancel_resale` | 5, 7, 10 |
 | `buy_resale` | 2, 3, 5, 10, 21, 33, 46 |
+| `burn_used_ticket` | 3, 5, 6, 48, 49 |
 | `get_event` | 3 |
 | `get_ticket` | 5 |
 | `token_decimals` | 2 |

@@ -606,3 +606,22 @@ fn buy_resale_requires_auth() {
         client.try_buy_resale(&buyer, &ticket_id)
     );
 }
+
+#[test]
+fn burn_used_ticket_requires_auth() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let owner = Address::generate(&env);
+    let ticket_id = issue_sample_ticket(&env, &client, &organizer, 1, &owner, 1_000);
+    client.check_in(&organizer, &ticket_id);
+    env.ledger()
+        .set_timestamp(10_000 + USED_TICKET_RETENTION_SECONDS);
+
+    assert_requires_auth!(
+        env,
+        client,
+        &organizer,
+        "burn_used_ticket",
+        client.try_burn_used_ticket(&organizer, &ticket_id)
+    );
+}

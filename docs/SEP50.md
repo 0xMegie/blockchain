@@ -35,13 +35,14 @@ this address hold" and "where is its metadata". The write surface (approvals,
 
 | SEP-50 event | Status |
 | --- | --- |
-| `transfer(from, to) -> token_id` | Not emitted. The contract emits `TicketIssued` and `TicketCheckedIn`, but no transfer event. |
+| `transfer(from, to) -> token_id` | Partly emitted. `transfer_ticket` publishes `TicketTransferred` with `from` and `to` (issue #115). Batch transfers, gift claims and resale purchases do not publish it yet. |
 | `approve`, `approve_for_all` | Not applicable (no approvals). |
 | `mint(to) -> token_id` | Not emitted under this name. `TicketIssued` carries the same information, with a different shape. |
 
-**Gap:** SEP-50 indexers detect transfers from `transfer` events. Ticket
-transfers therefore do not appear to those indexers until a `transfer` event is
-added. The read functions above still give the current owner.
+**Gap:** SEP-50 indexers detect transfers from `transfer` events. Only direct
+transfers through `transfer_ticket` publish one (`TicketTransferred`), so batch
+transfers, gift claims and resale purchases are still invisible to those
+indexers. The read functions above still give the current owner.
 
 ## Migration and storage notes
 

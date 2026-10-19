@@ -39,4 +39,6 @@ fn public_types_keep_their_crate_root_paths_and_ticket_encoding() {
     assert_eq!(Error::MathOverflow as u32, 45);
     assert_eq!(Error::NotTransferable as u32, 46);
     assert_eq!(Error::MetadataUriNotSet as u32, 47);
+    assert_eq!(Error::TicketNotUsed as u32, 48);
+    assert_eq!(Error::RetentionPeriodNotElapsed as u32, 49);
 }

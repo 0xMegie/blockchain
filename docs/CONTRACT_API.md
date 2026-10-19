@@ -31,7 +31,7 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `purchase_primary(buyer, event_id, tier, seat)` | `buyer` | Pays the configured tier price and atomically mints a ticket. |
 | `release_escrow(organizer, event_id)` | `organizer` | Releases an ended event's escrowed proceeds to its organizer. |
 | `set_purchase_throttle(admin, min_ledger_spacing)` | `admin` | Sets the minimum ledger spacing between a buyer's primary purchases. |
-| `transfer_ticket(from, ticket_id, to)` | `from` (owner) | Transfers one ticket directly and clears resale/gift state. |
+| `transfer_ticket(from, ticket_id, to)` | `from` (owner) | Transfers one ticket directly, clears resale/gift state and publishes `TicketTransferred` (issue #115). |
 | `transfer_batch(from, ticket_ids, to)` | `from` (owner) | Atomically transfers a bounded batch of tickets. |
 | `create_gift_claim(owner, ticket_id, secret_hash, expires_at)` | `owner` | Creates an expiring, secret-backed claim link for a ticket. |
 | `claim_gift(recipient, ticket_id, secret)` | `recipient` | Claims a gift ticket with its secret before expiry. |
@@ -42,6 +42,7 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `check_in(organizer, ticket_id)` | `organizer` | Marks one ticket used. |
 | `check_in_batch(organizer, ticket_ids)` | `organizer` | Atomically marks a bounded batch of tickets used. |
 | `revoke_ticket(organizer, ticket_id)` | `organizer` | Permanently revokes one ticket. |
+| `burn_used_ticket(organizer, ticket_id)` | `organizer` | Deletes a checked-in ticket's record once `starts_at + USED_TICKET_RETENTION_SECONDS` (30 days) has passed (issue #113). |
 | `set_seat(organizer, ticket_id, seat)` | `organizer` | Reassigns a ticket's seat before transfer/check-in restrictions apply. |
 | `revoke_with_refund(organizer, ticket_id, refund)` | `organizer` | Revokes a ticket and optionally refunds its original price. |
 | `revoke_batch(organizer, ticket_ids)` | `organizer` | Atomically revokes a bounded batch of tickets. |
@@ -58,6 +59,8 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `extend_ticket_ttl(ticket_id)` | anyone | Renews a ticket's persistent-storage TTL; does not change ticket state. |
 | `get_organizer_events(organizer)` | anyone | Returns the number of events registered by an organizer. |
 | `list_organizer_events(organizer, start, limit)` | anyone | Returns one page of an organizer's event ids; `limit` is clamped to 50 (issue #112). Events created before this index existed are skipped. |
+| `tickets_of(owner, start, limit)` | anyone | Returns one page of the ticket ids an address holds, in any status (issue #111). `limit` is clamped to 50. Order is not chronological, since removals move the last entry into the freed slot. Use `balance(owner)` for the count; the issue's `balance_of` name is not added, per the SEP-50 decision above. |
+| `total_tickets()` | anyone | Returns the number of tickets ever issued across all events (issue #114). Never decreases, including for revoked, used or burned tickets. |
 | `token_decimals()` | anyone | Returns decimals cached for the active payment token. |
 
 ## Batch operation atomicity

@@ -16,6 +16,7 @@ use soroban_sdk::{
 mod auth;
 mod auth_matrix;
 mod budget;
+mod burn_used;
 mod event_labels;
 mod events;
 mod guards;
@@ -23,6 +24,7 @@ pub mod helpers;
 mod metadata;
 mod organizer_allowlist;
 mod organizer_listing;
+mod owner_index;
 mod proptests;
 mod resale;
 mod resale_multiplier;
@@ -31,7 +33,9 @@ mod self_transfer;
 mod sep50;
 mod soulbound;
 mod ticket_labels;
+mod ticket_transferred;
 mod tickets;
+mod total_tickets;
 mod transfer_controls;
 mod ttl;
 
