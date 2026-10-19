@@ -13,6 +13,7 @@ pub use constants::{
     CATEGORY_OTHER, CATEGORY_SPORTS, MAX_BATCH_SIZE, MAX_CATEGORY_LEN, MAX_NAME_LEN,
     MAX_TICKET_LABEL_LEN, PAYMENT_TOKEN_CHANGE_DELAY_LEDGERS,
 };
+use constants::{LEDGER_BUMP, LEDGER_THRESHOLD};
 pub use error::Error;
 pub use events::{
     ContractInitialized, OrganizerApproved, OrganizerRevoked, PaymentTokenChanged,
@@ -24,9 +25,6 @@ pub use types::{
 };
 
 use soroban_sdk::{contract, contractimpl, token, Address, Bytes, BytesN, Env, String, Vec};
-
-const LEDGER_BUMP: u32 = 535_679; // ~31 days at 5s/ledger, matches other Soroban tooling defaults
-const LEDGER_THRESHOLD: u32 = 500_000;
 
 /// # Authorization ordering (issue #206)
 ///

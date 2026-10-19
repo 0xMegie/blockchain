@@ -3,6 +3,13 @@
 //! Centralizes the numeric limits used by the ticketing contract so they
 //! have one source of truth instead of scattered magic numbers.
 
+/// Ledgers a persistent or instance entry is extended to on each bump
+/// (~31 days at 5s/ledger, matches other Soroban tooling defaults).
+pub(crate) const LEDGER_BUMP: u32 = 535_679;
+
+/// Remaining TTL, in ledgers, below which an entry is bumped.
+pub(crate) const LEDGER_THRESHOLD: u32 = 500_000;
+
 /// Maximum number of tickets accepted by the batch entry points.
 pub const MAX_BATCH_SIZE: u32 = 50;
 
