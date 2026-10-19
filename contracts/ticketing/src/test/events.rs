@@ -300,6 +300,25 @@ fn lottery_rejects_more_winners_than_entrants() {
 }
 
 #[test]
+fn lottery_rejects_negative_price() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+
+    let mut entrants = Vec::new(&env);
+    entrants.push_back(Address::generate(&env));
+
+    let result = client.try_allocate_lottery(
+        &organizer,
+        &1,
+        &entrants,
+        &1u32,
+        &String::from_str(&env, "VIP"),
+        &-1i128,
+    );
+    assert_eq!(result, Err(Ok(Error::InvalidLottery)));
+}
+
+#[test]
 fn lottery_rejects_duplicate_entrants() {
     let (env, client, _token, _token_asset, _admin, organizer) = setup();
     make_event(&env, &client, &organizer, 1);

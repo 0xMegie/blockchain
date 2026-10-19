@@ -667,6 +667,58 @@ fn transfer_batch_moves_all_tickets_atomically() {
 }
 
 #[test]
+fn transfer_batch_rolls_back_when_a_middle_ticket_fails() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let buyer = Address::generate(&env);
+    let other_owner = Address::generate(&env);
+    let friend = Address::generate(&env);
+
+    let t1 = client.issue_ticket(
+        &organizer,
+        &1,
+        &buyer,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+        &1_000i128,
+    );
+    let t2 = client.issue_ticket(
+        &organizer,
+        &1,
+        &other_owner,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "2"),
+        &1_000i128,
+    );
+    let t3 = client.issue_ticket(
+        &organizer,
+        &1,
+        &buyer,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "3"),
+        &1_000i128,
+    );
+    let tickets_before = [
+        client.get_ticket(&t1),
+        client.get_ticket(&t2),
+        client.get_ticket(&t3),
+    ];
+
+    let mut batch = Vec::new(&env);
+    batch.push_back(t1);
+    batch.push_back(t2);
+    batch.push_back(t3);
+
+    assert_eq!(
+        client.try_transfer_batch(&buyer, &batch, &friend),
+        Err(Ok(Error::NotOwner))
+    );
+    assert_eq!(client.get_ticket(&t1), tickets_before[0]);
+    assert_eq!(client.get_ticket(&t2), tickets_before[1]);
+    assert_eq!(client.get_ticket(&t3), tickets_before[2]);
+}
+
+#[test]
 fn transfer_batch_rejects_empty_or_oversized_batches() {
     let (env, client, _token, _token_asset, _admin, organizer) = setup();
     make_event(&env, &client, &organizer, 1);
