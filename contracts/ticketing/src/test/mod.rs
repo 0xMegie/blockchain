@@ -31,6 +31,7 @@ mod self_transfer;
 mod sep50;
 mod soulbound;
 mod ticket_labels;
+mod ticket_transferred;
 mod tickets;
 mod total_tickets;
 mod transfer_controls;

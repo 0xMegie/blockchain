@@ -17,7 +17,7 @@ use constants::{LEDGER_BUMP, LEDGER_THRESHOLD};
 pub use error::Error;
 pub use events::{
     ContractInitialized, OrganizerApproved, OrganizerRevoked, PaymentTokenChanged,
-    PaymentTokenProposed, PurchaseThrottleUpdated, TicketCheckedIn, TicketIssued,
+    PaymentTokenProposed, PurchaseThrottleUpdated, TicketCheckedIn, TicketIssued, TicketTransferred,
 };
 pub use types::{
     Category, DataKey, Event, EventParams, GiftClaim, PendingPaymentToken, StoredTicket, Ticket,
@@ -653,7 +653,8 @@ impl TicketingContract {
         Ok(())
     }
 
-    /// Direct, non-marketplace transfer (gift, family member, etc).
+    /// Direct, non-marketplace transfer (gift, family member, etc). Publishes
+    /// `TicketTransferred` with the old and new owner (issue #115).
     pub fn transfer_ticket(
         env: Env,
         from: Address,
@@ -680,12 +681,18 @@ impl TicketingContract {
             return Err(Error::TransfersFrozen);
         }
         Self::move_owner_balance(&env, &ticket.owner, &to);
-        ticket.owner = to;
+        ticket.owner = to.clone();
         ticket.transfers += 1;
         ticket.status = TicketStatus::Valid;
         ticket.resale_price = 0;
         Self::remove_gift_claim(&env, ticket_id);
         Self::save_ticket(&env, ticket_id, &ticket);
+        TicketTransferred {
+            ticket_id,
+            from,
+            to,
+        }
+        .publish(&env);
         Ok(())
     }
 

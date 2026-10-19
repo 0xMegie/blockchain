@@ -78,3 +78,13 @@ pub struct OrganizerRevoked {
     pub admin: Address,
     pub organizer: Address,
 }
+
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Emitted when a ticket changes owner through `transfer_ticket` (issue #115).
+pub struct TicketTransferred {
+    #[topic]
+    pub ticket_id: u64,
+    pub from: Address,
+    pub to: Address,
+}

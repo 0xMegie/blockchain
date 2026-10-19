@@ -30,6 +30,20 @@ Emitted by `check_in`.
 Indexers and the backend's reconciliation job can subscribe to these
 instead of polling `get_ticket` for every ticket on every block.
 
+## `TicketTransferred`
+
+Emitted by `transfer_ticket` after the ownership change is saved (issue #115).
+
+| Field | Type | Notes |
+|---|---|---|
+| `ticket_id` | `u64` | topic |
+| `from` | `Address` | Owner before the transfer |
+| `to` | `Address` | Owner after the transfer |
+
+A rejected transfer publishes nothing. Batch transfers, gift claims and resale
+purchases change ownership without publishing this event today, so indexers
+that need every owner change must still read them from `owner_of`.
+
 ## Admin events
 
 | Event | Emitted by | Fields |

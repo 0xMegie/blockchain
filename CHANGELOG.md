@@ -18,6 +18,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/).
   for the dependency versioning policy and upgrade procedure.
 
 ### Added
+- `TicketTransferred` event (`ticket_id` topic, `from`, `to`) published by
+  `transfer_ticket`. Batch transfers, gift claims and resale purchases do not
+  publish it yet (#115).
 - `total_tickets()` returns the number of tickets ever issued across all
   events. It only grows, so revoked, used and burned tickets still count (#114).
 - Optional ticket metadata URI set at issuance through

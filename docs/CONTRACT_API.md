@@ -31,7 +31,7 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `purchase_primary(buyer, event_id, tier, seat)` | `buyer` | Pays the configured tier price and atomically mints a ticket. |
 | `release_escrow(organizer, event_id)` | `organizer` | Releases an ended event's escrowed proceeds to its organizer. |
 | `set_purchase_throttle(admin, min_ledger_spacing)` | `admin` | Sets the minimum ledger spacing between a buyer's primary purchases. |
-| `transfer_ticket(from, ticket_id, to)` | `from` (owner) | Transfers one ticket directly and clears resale/gift state. |
+| `transfer_ticket(from, ticket_id, to)` | `from` (owner) | Transfers one ticket directly, clears resale/gift state and publishes `TicketTransferred` (issue #115). |
 | `transfer_batch(from, ticket_ids, to)` | `from` (owner) | Atomically transfers a bounded batch of tickets. |
 | `create_gift_claim(owner, ticket_id, secret_hash, expires_at)` | `owner` | Creates an expiring, secret-backed claim link for a ticket. |
 | `claim_gift(recipient, ticket_id, secret)` | `recipient` | Claims a gift ticket with its secret before expiry. |
