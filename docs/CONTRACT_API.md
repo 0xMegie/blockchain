@@ -54,6 +54,13 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `get_organizer_events(organizer)` | anyone | Returns the number of events registered by an organizer. |
 | `token_decimals()` | anyone | Returns decimals cached for the active payment token. |
 
+## Batch operation atomicity
+
+The state-changing batch operations (`transfer_batch`, `check_in_batch`, and
+`revoke_batch`) are atomic. If any item fails validation, the call returns an
+error and no changes from that call are committed, including changes made for
+items processed before the failure.
+
 > Resale cutoff semantics: once `ledger_timestamp >= starts_at - resale_cutoff_seconds`, all resale actions reject with `Error::ResaleClosed`. That policy is enforced by the contract's `resale_closed` helper and applies to `list_for_resale`, `buy_resale`, and `cancel_resale`.
 
 ## Scanner validity checks

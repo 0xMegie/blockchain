@@ -642,6 +642,8 @@ impl TicketingContract {
 
     /// Direct, non-marketplace batch transfer of tickets to a single recipient.
     /// Bounded by `MAX_BATCH_SIZE`.
+    /// The operation is atomic: if any ticket fails validation, all changes
+    /// from this call are rolled back.
     pub fn transfer_batch(
         env: Env,
         from: Address,
@@ -844,6 +846,8 @@ impl TicketingContract {
 
     /// Marks a batch of tickets as used at the point of entry for group admission.
     /// Only the event's organizer may check tickets in, bounded by `MAX_BATCH_SIZE`.
+    /// The operation is atomic: if any ticket fails validation, all changes
+    /// from this call are rolled back.
     ///
     /// Tickets listed for resale (`TicketStatus::Resale`) are rejected (issue #132).
     ///
@@ -979,6 +983,8 @@ impl TicketingContract {
 
     /// Mass revocation of tickets by the event organizer (chargeback, policy violation).
     /// Bounded by `MAX_BATCH_SIZE`. Does not decrement `Event.tickets_issued`.
+    /// The operation is atomic: if any ticket fails validation, all changes
+    /// from this call are rolled back.
     ///
     /// # Errors
     ///
