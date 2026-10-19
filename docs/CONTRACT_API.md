@@ -23,7 +23,9 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `enable_escrow(organizer, event_id, escrow_release_ledger)` | `organizer` | Enables escrow for primary-sale proceeds before any ticket is issued. |
 | `set_event_payment_token(organizer, event_id, token)` | `organizer` | Sets or clears the event payment-token override before tickets are issued. |
 | `event_payment_token(event_id)` | anyone | Resolves the event override or contract-wide payment token. |
+| `set_event_transferable(organizer, event_id, transferable)` | `organizer` | Makes an event soulbound (`false`) or transferable. Only before any ticket is issued (issue #108). |
 | `issue_ticket(organizer, event_id, to, tier, seat, price)` | `organizer` | Mints a ticket for an off-chain/previously settled payment. |
+| `issue_ticket_with_metadata(organizer, event_id, to, tier, seat, price, metadata_uri)` | `organizer` | Mints a ticket like `issue_ticket` and attaches an optional metadata URI of at most 256 bytes (issue #109). |
 | `set_tier_price(organizer, event_id, tier, price)` | `organizer` | Sets the primary-sale price for an event tier. |
 | `get_tier_price(event_id, tier)` | anyone | Reads the configured primary-sale price for an event tier. |
 | `purchase_primary(buyer, event_id, tier, seat)` | `buyer` | Pays the configured tier price and atomically mints a ticket. |
@@ -50,8 +52,12 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `quote_resale(ticket_id)` | anyone | Returns a read-only quote `(price, royalty, seller_amount)` for resale settlement. |
 | `get_event(event_id)` | anyone | Read-only event lookup. |
 | `get_ticket(ticket_id)` | anyone | Read-only ticket lookup. |
+| `owner_of(token_id)` | anyone | SEP-50 read: the address that currently owns a ticket (issue #110). |
+| `balance(owner)` | anyone | SEP-50 read: how many tickets an address owns, in any status (issue #110). The standard names it `balance`, not `balance_of`. |
+| `token_uri(token_id)` | anyone | SEP-50 read: the metadata URI set at issuance. Errors with `MetadataUriNotSet` when there is none (issue #109). |
 | `extend_ticket_ttl(ticket_id)` | anyone | Renews a ticket's persistent-storage TTL; does not change ticket state. |
 | `get_organizer_events(organizer)` | anyone | Returns the number of events registered by an organizer. |
+| `list_organizer_events(organizer, start, limit)` | anyone | Returns one page of an organizer's event ids; `limit` is clamped to 50 (issue #112). Events created before this index existed are skipped. |
 | `token_decimals()` | anyone | Returns decimals cached for the active payment token. |
 
 ## Batch operation atomicity

@@ -98,4 +98,9 @@ pub enum Error {
     SamePaymentToken = 44,
     /// Arithmetic overflow in financial calculation (e.g. resale cap or royalty calculation).
     MathOverflow = 45,
+    /// The event is soulbound: its tickets cannot be transferred, gifted,
+    /// listed for resale or bought on the resale market (Issue #108).
+    NotTransferable = 46,
+    /// The ticket was issued without a metadata URI (Issue #109).
+    MetadataUriNotSet = 47,
 }

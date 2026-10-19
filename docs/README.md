@@ -17,3 +17,4 @@
 - [GLOSSARY.md](GLOSSARY.md) — terminology
 - [FAQ.md](FAQ.md) — frequently asked questions
 - [NATIVE_XLM.md](NATIVE_XLM.md) — native XLM payments via the Stellar Asset Contract
+- [SEP50.md](SEP50.md) — SEP-50 (NFT) compliance review: what is implemented and what is not

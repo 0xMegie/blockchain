@@ -29,6 +29,13 @@ pub const MAX_CATEGORY_LEN: u32 = 32;
 /// Maximum accepted length, in bytes, for a ticket `tier` or `seat` (Issue #126).
 pub const MAX_TICKET_LABEL_LEN: u32 = 32;
 
+/// Maximum accepted length, in bytes, for a ticket metadata URI (Issue #109).
+pub const MAX_METADATA_URI_LEN: u32 = 256;
+
+/// Maximum number of event ids returned by one `list_organizer_events` page
+/// (Issue #112). Larger requested pages are clamped to this bound.
+pub const MAX_PAGE_SIZE: u32 = 50;
+
 /// Stable lowercase labels for the optional common category vocabulary.
 pub const CATEGORY_CONCERT: &str = "concert";
 pub const CATEGORY_FLIGHT: &str = "flight";
