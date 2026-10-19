@@ -78,6 +78,14 @@ diagnostic transaction.
 | 47 | `MetadataUriNotSet` | `token_uri` was called for a ticket issued without a metadata URI (issue #109) |
 | 48 | `TicketNotUsed` | `burn_used_ticket` was called for a ticket that has not been checked in, or that was revoked (issue #113) |
 | 49 | `RetentionPeriodNotElapsed` | `burn_used_ticket` was called before `starts_at + USED_TICKET_RETENTION_SECONDS` (issue #113) |
+| 50 | `SoldOut` | A primary mint would exceed the event's `max_tickets` cap (issue #92) |
+| 51 | `InvalidCapacity` | `set_event_capacity` was given zero, or a cap below `tickets_issued` (issue #92) |
+| 52 | `CheckInWindowClosed` | Check-in was attempted before the window opened or after it closed (issue #95) |
+| 53 | `InvalidCheckInWindow` | `set_event_check_in_window` was given an `ends_at` that is not after `starts_at` (issue #95) |
+| 54 | `TicketExpired` | Check-in or a transfer was attempted at or after the event's `ticket_expires_at` (issue #76) |
+| 55 | `InvalidTicketExpiry` | `set_event_ticket_expiry` was given a time that is not in the future (issue #76) |
+| 56 | `ReentryNotAllowed` | `pass_out` was called on an event with `max_reentries` of zero (issue #78) |
+| 57 | `ReentryLimitReached` | `pass_out` was called after the ticket used all of its re-entries (issue #78) |
 
 ### Grouping
 
@@ -167,8 +175,8 @@ condition is **permanent** or **time/balance dependent**:
 
 | Class | Codes | Retry strategy |
 |---|---|---|
-| Permanent — fix the request | 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 17, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47 | Do not retry automatically; return a 4xx-equivalent to the caller |
-| Time-dependent — retry after waiting | 15, 16, 20, 21, 31 | Retry when the relevant timestamp or ledger sequence has passed |
+| Permanent — fix the request | 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 17, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 50, 51, 53, 54, 55, 56, 57 | Do not retry automatically; return a 4xx-equivalent to the caller |
+| Time-dependent — retry after waiting | 15, 16, 20, 21, 31, 52 | Retry when the relevant timestamp or ledger sequence has passed |
 | Transient operational | 1, 2, 14, 18 | Deployment or configuration error; retrying the same arguments will not help |
 
 Codes 14 and 18 are listed as operational rather than permanent because

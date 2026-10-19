@@ -18,6 +18,20 @@ This project follows [Keep a Changelog](https://keepachangelog.com/).
   for the dependency versioning policy and upgrade procedure.
 
 ### Added
+- Event capacity limit: `set_event_capacity` caps the tickets an event may
+  issue. `issue_ticket`, `purchase_primary` and `allocate_lottery` reject a
+  mint that would exceed it with `SoldOut`; a cap below `tickets_issued` is
+  rejected with `InvalidCapacity` (#92).
+- Check-in window: `set_event_check_in_window` opens check-in
+  `check_in_opens_seconds` before `starts_at` and closes it after `ends_at`.
+  `check_in` and `check_in_batch` reject out-of-window check-in with
+  `CheckInWindowClosed`; `ends_at` must follow `starts_at` (#95).
+- Ticket expiry: `set_event_ticket_expiry` ends ticket validity at a timestamp.
+  `check_in`, `check_in_batch` and every transfer path reject expired tickets
+  with `TicketExpired` (#76).
+- Re-entry: `set_event_max_reentries` allows a checked-in ticket to be passed
+  back out with `pass_out` up to the limit, which the organizer sets per event.
+  `reentry_count` reads the count (#78).
 - `tickets_of(owner, start, limit)` pages through the ticket ids an address
   holds, with `limit` clamped to `MAX_PAGE_SIZE`. The index is kept current on
   mint, direct and batch transfers, gift claims, resale purchases and burns

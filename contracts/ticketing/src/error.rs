@@ -107,4 +107,20 @@ pub enum Error {
     TicketNotUsed = 48,
     /// The used ticket's retention period has not elapsed yet (issue #113).
     RetentionPeriodNotElapsed = 49,
+    /// The event has reached its maximum ticket count (issue #92).
+    SoldOut = 50,
+    /// The capacity is below the number of tickets already issued (issue #92).
+    InvalidCapacity = 51,
+    /// Check-in is outside the event's configured window (issue #95).
+    CheckInWindowClosed = 52,
+    /// The check-in window is invalid, e.g. it ends before the event starts (issue #95).
+    InvalidCheckInWindow = 53,
+    /// The ticket has passed its expiry time (issue #76).
+    TicketExpired = 54,
+    /// The ticket expiry is not in the future (issue #76).
+    InvalidTicketExpiry = 55,
+    /// The event does not allow re-entry, or the ticket is not checked in (issue #78).
+    ReentryNotAllowed = 56,
+    /// The ticket has used all of its allowed re-entries (issue #78).
+    ReentryLimitReached = 57,
 }

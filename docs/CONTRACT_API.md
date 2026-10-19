@@ -24,6 +24,10 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `set_event_payment_token(organizer, event_id, token)` | `organizer` | Sets or clears the event payment-token override before tickets are issued. |
 | `event_payment_token(event_id)` | anyone | Resolves the event override or contract-wide payment token. |
 | `set_event_transferable(organizer, event_id, transferable)` | `organizer` | Makes an event soulbound (`false`) or transferable. Only before any ticket is issued (issue #108). |
+| `set_event_capacity(organizer, event_id, max_tickets)` | `organizer` | Caps total tickets an event may issue, or clears the cap with `None`. Rejects zero or a cap below `tickets_issued` with `InvalidCapacity` (issue #92). |
+| `set_event_check_in_window(organizer, event_id, check_in_opens_seconds, ends_at)` | `organizer` | Opens check-in `check_in_opens_seconds` before `starts_at` and closes it after `ends_at` (both optional). `ends_at` must be after `starts_at` (issue #95). |
+| `set_event_ticket_expiry(organizer, event_id, expires_at)` | `organizer` | Expires the event's tickets at `expires_at`, or clears the expiry with `None`. The expiry must be in the future (issue #76). |
+| `set_event_max_reentries(organizer, event_id, max_reentries)` | `organizer` | Sets how many times a checked-in ticket may re-enter. `0` disables re-entry (issue #78). |
 | `issue_ticket(organizer, event_id, to, tier, seat, price)` | `organizer` | Mints a ticket for an off-chain/previously settled payment. |
 | `issue_ticket_with_metadata(organizer, event_id, to, tier, seat, price, metadata_uri)` | `organizer` | Mints a ticket like `issue_ticket` and attaches an optional metadata URI of at most 256 bytes (issue #109). |
 | `set_tier_price(organizer, event_id, tier, price)` | `organizer` | Sets the primary-sale price for an event tier. |
@@ -43,6 +47,8 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `check_in_batch(organizer, ticket_ids)` | `organizer` | Atomically marks a bounded batch of tickets used. |
 | `revoke_ticket(organizer, ticket_id)` | `organizer` | Permanently revokes one ticket. |
 | `burn_used_ticket(organizer, ticket_id)` | `organizer` | Deletes a checked-in ticket's record once `starts_at + USED_TICKET_RETENTION_SECONDS` (30 days) has passed (issue #113). |
+| `pass_out(organizer, ticket_id)` | `organizer` | Returns a checked-in ticket to `Valid` so it can re-enter, up to the event's `max_reentries`. Returns the new re-entry count (issue #78). |
+| `reentry_count(ticket_id)` | anyone | Number of times a ticket has been passed out for re-entry (issue #78). |
 | `set_seat(organizer, ticket_id, seat)` | `organizer` | Reassigns a ticket's seat before transfer/check-in restrictions apply. |
 | `revoke_with_refund(organizer, ticket_id, refund)` | `organizer` | Revokes a ticket and optionally refunds its original price. |
 | `revoke_batch(organizer, ticket_ids)` | `organizer` | Atomically revokes a bounded batch of tickets. |

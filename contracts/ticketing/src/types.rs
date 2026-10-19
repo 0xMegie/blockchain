@@ -116,6 +116,22 @@ pub struct Event {
     /// gifted, listed for resale or bought on the resale market (issue #108).
     /// Defaults to true. Settable only before tickets are issued.
     pub transferable: bool,
+    /// Maximum number of tickets the event may ever issue (issue #92). `None`
+    /// means uncapped. Compared against `tickets_issued`, so revoked tickets
+    /// still count toward it.
+    pub max_tickets: Option<u64>,
+    /// Seconds before `starts_at` at which check-in opens (issue #95). `None`
+    /// means check-in is open from the start of the event.
+    pub check_in_opens_seconds: Option<u64>,
+    /// Ledger timestamp after which check-in closes (issue #95). `None` means
+    /// check-in never closes.
+    pub ends_at: Option<u64>,
+    /// Ledger timestamp after which tickets can no longer be checked in or
+    /// transferred (issue #76). `None` means tickets never expire.
+    pub ticket_expires_at: Option<u64>,
+    /// How many times a checked-in ticket may be passed back out for re-entry
+    /// (issue #78). `0` disables re-entry for the event.
+    pub max_reentries: u32,
 }
 
 /// A ticket minted for an event.
@@ -245,6 +261,9 @@ pub enum DataKey {
     /// Position of a ticket inside its owner's index, so a transfer or burn can
     /// remove it in constant time (issue #111).
     TicketOwnerPos(u64),
+    /// Number of times a ticket has been passed back out for re-entry (issue #78).
+    /// Stored apart from `Ticket` so tickets that never re-enter pay no extra cost.
+    ReentryCount(u64),
 }
 
 // Keep the persistent encoding beside the public and stored ticket types.
