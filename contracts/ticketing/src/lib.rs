@@ -169,6 +169,14 @@ impl TicketingContract {
         if env.ledger().sequence() < pending.apply_after_ledger {
             return Err(Error::TimelockNotElapsed);
         }
+        let outstanding_escrow = env
+            .storage()
+            .instance()
+            .get::<_, i128>(&DataKey::OutstandingEscrow)
+            .unwrap_or(0);
+        if outstanding_escrow > 0 {
+            return Err(Error::EscrowNotEnabled);
+        }
         let old_token = Self::payment_token(&env)?;
         // Capture the decimals of the token becoming active so clients always
         // see decimals matching the active payment token (issue #233).
@@ -367,6 +375,9 @@ impl TicketingContract {
         if event.tickets_issued > 0 {
             return Err(Error::EventAlreadyStarted);
         }
+        if escrow_release_ledger <= env.ledger().sequence() {
+            return Err(Error::EventNotEnded);
+        }
         event.escrow_enabled = true;
         event.escrow_release_ledger = escrow_release_ledger;
         Self::save_event(&env, event_id, &event);
@@ -514,6 +525,14 @@ impl TicketingContract {
             if event.escrow_enabled {
                 token_client.transfer(&buyer, env.current_contract_address(), &price);
                 event.escrow_balance += price;
+                let current_escrow = env
+                    .storage()
+                    .instance()
+                    .get::<_, i128>(&DataKey::OutstandingEscrow)
+                    .unwrap_or(0);
+                env.storage()
+                    .instance()
+                    .set(&DataKey::OutstandingEscrow, &(current_escrow + price));
                 env.storage()
                     .persistent()
                     .set(&DataKey::Event(event_id), &event);
@@ -552,6 +571,14 @@ impl TicketingContract {
         event.escrow_balance = 0;
         Self::save_event(&env, event_id, &event);
         if amount > 0 {
+            let current_escrow = env
+                .storage()
+                .instance()
+                .get::<_, i128>(&DataKey::OutstandingEscrow)
+                .unwrap_or(0);
+            env.storage()
+                .instance()
+                .set(&DataKey::OutstandingEscrow, &(current_escrow - amount));
             let token_client =
                 token::Client::new(&env, &Self::payment_token_for_event(&env, &event)?);
             token_client.transfer(&env.current_contract_address(), &organizer, &amount);
@@ -917,17 +944,36 @@ impl TicketingContract {
         Self::extend_instance_ttl(&env);
         organizer.require_auth();
         let mut ticket = Self::get_ticket_inner(&env, ticket_id)?;
-        let event = Self::require_organizer(&env, ticket.event_id, &organizer)?;
+        let mut event = Self::require_organizer(&env, ticket.event_id, &organizer)?;
         Self::require_not_terminal(&ticket)?;
         if refund && ticket.original_price > 0 {
             let token_client =
                 token::Client::new(&env, &Self::payment_token_for_event(&env, &event)?);
-            token_client.transfer(&organizer, &ticket.owner, &ticket.original_price);
+            let refund_source = if event.escrow_enabled && event.escrow_balance >= ticket.original_price {
+                env.current_contract_address()
+            } else {
+                organizer.clone()
+            };
+            token_client.transfer(&refund_source, &ticket.owner, &ticket.original_price);
+            if event.escrow_enabled && event.escrow_balance >= ticket.original_price {
+                event.escrow_balance -= ticket.original_price;
+                let current_escrow = env
+                    .storage()
+                    .instance()
+                    .get::<_, i128>(&DataKey::OutstandingEscrow)
+                    .unwrap_or(0);
+                env.storage()
+                    .instance()
+                    .set(&DataKey::OutstandingEscrow, &(current_escrow - ticket.original_price));
+            }
         }
         ticket.status = TicketStatus::Revoked;
         ticket.resale_price = 0;
         Self::remove_gift_claim(&env, ticket_id);
         Self::save_ticket(&env, ticket_id, &ticket);
+        if event.escrow_enabled {
+            Self::save_event(&env, ticket.event_id, &event);
+        }
         Ok(())
     }
 

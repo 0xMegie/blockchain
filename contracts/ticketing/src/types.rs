@@ -219,6 +219,9 @@ pub enum DataKey {
     /// Presence marks an organizer the admin has approved to create events
     /// (issue #135).
     ApprovedOrganizer(Address),
+    /// Total outstanding escrow balance across all events (issue #317).
+    /// Used to prevent payment token changes while funds are in escrow.
+    OutstandingEscrow,
 }
 
 // Keep the persistent encoding beside the public and stored ticket types.
