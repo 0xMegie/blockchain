@@ -46,6 +46,8 @@ clients do not break. It may be removed only in a future breaking deployment.
 | `list_for_resale(owner, ticket_id, price)` | `owner` | Lists an owned ticket for resale within the event's price limits. |
 | `cancel_resale(owner, ticket_id)` | `owner` | Cancels an active resale listing before the resale cutoff. |
 | `buy_resale(buyer, ticket_id)` | `buyer` | Purchases a resale listing and settles royalty plus seller proceeds. |
+| `get_resale_price_cap(ticket_id)` | anyone | Exposes the maximum allowed resale price for a ticket. |
+| `quote_resale(ticket_id)` | anyone | Returns a read-only quote `(price, royalty, seller_amount)` for resale settlement. |
 | `get_event(event_id)` | anyone | Read-only event lookup. |
 | `get_ticket(ticket_id)` | anyone | Read-only ticket lookup. |
 | `extend_ticket_ttl(ticket_id)` | anyone | Renews a ticket's persistent-storage TTL; does not change ticket state. |

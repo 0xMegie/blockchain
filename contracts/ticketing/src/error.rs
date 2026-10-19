@@ -96,4 +96,6 @@ pub enum Error {
     InvalidTicketLifecycle = 43,
     /// The proposed payment token is the same as the currently active one.
     SamePaymentToken = 44,
+    /// Arithmetic overflow in financial calculation (e.g. resale cap or royalty calculation).
+    MathOverflow = 45,
 }

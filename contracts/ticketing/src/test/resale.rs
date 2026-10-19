@@ -899,3 +899,109 @@ fn buy_resale_settles_in_per_event_payment_token() {
     assert_eq!(ticket.status, TicketStatus::Valid);
     assert_eq!(ticket.resale_price, 0);
 }
+
+#[test]
+fn test_get_resale_price_cap() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let owner = Address::generate(&env);
+
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &owner,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "A1"),
+        &1_000i128,
+    );
+
+    // Event 1 has max_resale_multiplier_bps = 12000 (120%).
+    // 1000 * 12000 / 10000 = 1200.
+    let cap = client.get_resale_price_cap(&ticket_id);
+    assert_eq!(cap, 1_200i128);
+
+    // Error on nonexistent ticket
+    assert_eq!(client.try_get_resale_price_cap(&999), Err(Ok(Error::TicketNotFound)));
+}
+
+#[test]
+fn test_quote_resale() {
+    let (env, client, token, token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let seller = Address::generate(&env);
+    let buyer = Address::generate(&env);
+
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &seller,
+        &String::from_str(&env, "VIP"),
+        &String::from_str(&env, "1"),
+        &1_000i128,
+    );
+
+    // Cannot quote resale for a ticket not listed for resale
+    assert_eq!(client.try_quote_resale(&ticket_id), Err(Ok(Error::NotForResale)));
+
+    // List for resale at 1100
+    client.list_for_resale(&seller, &ticket_id, &1_100i128);
+
+    // Quote resale matches buy_resale math:
+    // price = 1100
+    // royalty = 1100 * 500 / 10000 = 55
+    // seller_amount = 1100 - 55 = 1045
+    let (price, royalty, seller_amount) = client.quote_resale(&ticket_id);
+    assert_eq!(price, 1_100i128);
+    assert_eq!(royalty, 55i128);
+    assert_eq!(seller_amount, 1_045i128);
+
+    // Buy resale and verify actual settlement amounts match the quote exactly
+    token_asset.mint(&buyer, &10_000i128);
+    client.buy_resale(&buyer, &ticket_id);
+
+    assert_eq!(token.balance(&organizer), royalty);
+    assert_eq!(token.balance(&seller), seller_amount);
+}
+
+#[test]
+fn test_math_overflow_in_resale_cap_and_royalty() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let owner = Address::generate(&env);
+
+    // Mint a ticket with price near i128::MAX such that original_price * 12000 overflows
+    let huge_price = i128::MAX / 2; // (i128::MAX / 2) * 12000 overflows i128
+    let ticket_id = client.issue_ticket(
+        &organizer,
+        &1,
+        &owner,
+        &String::from_str(&env, "GA"),
+        &String::from_str(&env, "1"),
+        &huge_price,
+    );
+
+    // get_resale_price_cap must return MathOverflow error
+    assert_eq!(client.try_get_resale_price_cap(&ticket_id), Err(Ok(Error::MathOverflow)));
+
+    // list_for_resale must return MathOverflow error
+    assert_eq!(
+        client.try_list_for_resale(&owner, &ticket_id, &100i128),
+        Err(Ok(Error::MathOverflow))
+    );
+}
+
+#[test]
+fn test_ticket_issued_event_fields() {
+    let (env, client, _token, _token_asset, _admin, organizer) = setup();
+    make_event(&env, &client, &organizer, 1);
+    let owner = Address::generate(&env);
+    let tier = String::from_str(&env, "FrontRow");
+    let seat = String::from_str(&env, "A12");
+
+    let ticket_id = client.issue_ticket(&organizer, &1, &owner, &tier, &seat, &2_500i128);
+    assert_eq!(ticket_id, 0);
+
+    let ticket = client.get_ticket(&ticket_id);
+    assert_eq!(ticket.owner, owner);
+    assert_eq!(ticket.tier, tier);
+}

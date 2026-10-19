@@ -72,6 +72,8 @@ diagnostic transaction.
 | 41 | `OrganizerNotApproved` | `create_event` / `create_event_with_options` was called by an organizer the admin has not added with `approve_organizer` (see [ORGANIZER_ALLOWLIST.md](ORGANIZER_ALLOWLIST.md)) |
 | 42 | `ResaleListingActive` | The ticket is listed for resale and cannot be checked in until cancelled |
 | 43 | `InvalidTicketLifecycle` | A stored ticket lifecycle word contains an unknown status code |
+| 44 | `SamePaymentToken` | The proposed payment token is the same as the currently active one |
+| 45 | `MathOverflow` | Arithmetic overflow in financial calculation (resale cap or royalty calculation) |
 
 ### Grouping
 

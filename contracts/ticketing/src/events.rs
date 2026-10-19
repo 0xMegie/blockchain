@@ -1,7 +1,7 @@
 //! Contract events emitted by the ticketing contract.
 #![allow(missing_docs)]
 
-use soroban_sdk::{contractevent, Address};
+use soroban_sdk::{contractevent, Address, String};
 
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -10,6 +10,8 @@ pub struct TicketIssued {
     #[topic]
     pub ticket_id: u64,
     pub event_id: u64,
+    pub owner: Address,
+    pub tier: String,
 }
 
 #[contractevent]
