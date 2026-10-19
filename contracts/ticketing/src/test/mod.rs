@@ -32,6 +32,7 @@ mod sep50;
 mod soulbound;
 mod ticket_labels;
 mod tickets;
+mod total_tickets;
 mod transfer_controls;
 mod ttl;
 

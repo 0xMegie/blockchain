@@ -1396,6 +1396,19 @@ impl TicketingContract {
             .unwrap_or(0)
     }
 
+    /// Total number of tickets ever issued across all events (issue #114).
+    ///
+    /// This is the next ticket id, so it only grows. Tickets that were later
+    /// revoked, checked in or burned still count. It is the global counterpart
+    /// of the per-event `Event.tickets_issued`.
+    pub fn total_tickets(env: Env) -> u64 {
+        Self::extend_instance_ttl(&env);
+        env.storage()
+            .instance()
+            .get(&DataKey::NextTicketId)
+            .unwrap_or(0)
+    }
+
     /// SEP-50 `token_uri`: the metadata URI set when the ticket was issued
     /// (issues #109 and #110).
     ///

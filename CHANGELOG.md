@@ -18,6 +18,8 @@ This project follows [Keep a Changelog](https://keepachangelog.com/).
   for the dependency versioning policy and upgrade procedure.
 
 ### Added
+- `total_tickets()` returns the number of tickets ever issued across all
+  events. It only grows, so revoked, used and burned tickets still count (#114).
 - Optional ticket metadata URI set at issuance through
   `issue_ticket_with_metadata`, bounded by `MAX_METADATA_URI_LEN` (256 bytes),
   and read back through `token_uri`. `issue_ticket` keeps its signature and
