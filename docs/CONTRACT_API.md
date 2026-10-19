@@ -9,29 +9,48 @@ this is a quick-reference summary.
 convention; `verify_ticket` is deprecated but remains available so existing
 clients do not break. It may be removed only in a future breaking deployment.
 
-| Function                                                                                    | Caller    | Effect                                                                                                       |
-| ------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------ |
-| `initialize(admin, payment_token)`                                                          | admin     | One-time setup                                                                                               |
-| `create_event(organizer, event_id, name, category, max_resale_multiplier_bps, royalty_bps)` | organizer | Registers an event                                                                                           |
-| `issue_ticket(organizer, event_id, to, tier, seat, price)`                                  | organizer | Mints a ticket (off-chain payment already settled)                                                           |
-| `purchase_primary(buyer, event_id, tier, seat, price)`                                      | buyer     | On-chain primary sale + mint                                                                                 |
-| `transfer_ticket(from, ticket_id, to)`                                                      | owner     | Direct transfer                                                                                              |
-| `get_ticket(ticket_id)`                                                                     | anyone    | Canonical read-only ticket lookup                                                                            |
-| `is_ticket_valid(ticket_id)` | anyone | Status-only check-in eligibility; returns `Result<bool, Error>` |
-| `is_valid(ticket_id, owner)` | anyone | Boolean ownership and validity check; errors become `false` |
-| `verify_ticket(ticket_id)`                                                                  | anyone    | Deprecated compatibility alias for `get_ticket`                                                              |
-| `check_in(organizer, ticket_id)`                                                            | organizer | Marks used, one-way                                                                                          |
-| `revoke_ticket(organizer, ticket_id)`                                                       | organizer | Permanently voids                                                                                            |
-| `revoke_with_refund(organizer, ticket_id, refund)`                                          | organizer | Voids a ticket, optionally paying the original price back to the owner in the event's accepted payment token |
-| `set_event_payment_token(organizer, event_id, token)`                                       | organizer | Sets/clears the event's accepted payment token (only before any tickets are issued)                          |
-| `event_payment_token(event_id)`                                                             | anyone    | Resolves the event's payment token (per-event override or contract-wide token)                               |
-| `token_decimals()`                                                                          | anyone    | Decimals of the active payment token (cached at initialize / token change)                                   |
-| `list_for_resale(owner, ticket_id, price)`                                                  | owner     | Lists under the event's price cap                                                                            |
-| `cancel_resale(owner, ticket_id)`                                                           | owner     | Pulls a listing before the resale cutoff; rejects with `ResaleClosed` after cutoff                           |
-| `buy_resale(buyer, ticket_id)`                                                              | buyer     | Buys a listing, splits royalty                                                                               |
-| `get_event(event_id)`                                                                       | anyone    | Read-only event lookup                                                                                       |
-| `get_ticket(ticket_id)`                                                                     | anyone    | Read-only ticket lookup                                                                                      |
-| `get_organizer_events(organizer)`                                                           | anyone    | Number of events registered by an organizer                                                                  |
+| Function | Auth requirement | Effect |
+| --- | --- | --- |
+| `initialize(admin, payment_token)` | `admin` | One-time setup; selects the contract-wide payment token. |
+| `propose_payment_token(admin, new_token)` | `admin` | Starts the timelocked contract-wide payment-token change. |
+| `apply_payment_token(admin)` | `admin` | Applies the pending payment-token change after its timelock. |
+| `approve_organizer(admin, organizer)` | `admin` | Adds an organizer to the event-creation allowlist. |
+| `revoke_organizer(admin, organizer)` | `admin` | Removes an organizer from the event-creation allowlist. |
+| `is_approved_organizer(organizer)` | anyone | Reports whether an address is approved to create events. |
+| `create_event(organizer, event_id, params)` | `organizer` | Registers an event using the default transfer/resale controls. The organizer must be approved. |
+| `create_event_with_options(organizer, event_id, params, min_resale_multiplier_bps, max_transfers_per_ticket)` | `organizer` | Registers an event with optional resale-floor and transfer-limit controls. The organizer must be approved. |
+| `allocate_lottery(organizer, event_id, entrants, winner_count, tier, price)` | `organizer` | Randomly selects entrants and mints complimentary/reserved tickets. |
+| `enable_escrow(organizer, event_id, escrow_release_ledger)` | `organizer` | Enables escrow for primary-sale proceeds before any ticket is issued. |
+| `set_event_payment_token(organizer, event_id, token)` | `organizer` | Sets or clears the event payment-token override before tickets are issued. |
+| `event_payment_token(event_id)` | anyone | Resolves the event override or contract-wide payment token. |
+| `issue_ticket(organizer, event_id, to, tier, seat, price)` | `organizer` | Mints a ticket for an off-chain/previously settled payment. |
+| `set_tier_price(organizer, event_id, tier, price)` | `organizer` | Sets the primary-sale price for an event tier. |
+| `get_tier_price(event_id, tier)` | anyone | Reads the configured primary-sale price for an event tier. |
+| `purchase_primary(buyer, event_id, tier, seat)` | `buyer` | Pays the configured tier price and atomically mints a ticket. |
+| `release_escrow(organizer, event_id)` | `organizer` | Releases an ended event's escrowed proceeds to its organizer. |
+| `set_purchase_throttle(admin, min_ledger_spacing)` | `admin` | Sets the minimum ledger spacing between a buyer's primary purchases. |
+| `transfer_ticket(from, ticket_id, to)` | `from` (owner) | Transfers one ticket directly and clears resale/gift state. |
+| `transfer_batch(from, ticket_ids, to)` | `from` (owner) | Atomically transfers a bounded batch of tickets. |
+| `create_gift_claim(owner, ticket_id, secret_hash, expires_at)` | `owner` | Creates an expiring, secret-backed claim link for a ticket. |
+| `claim_gift(recipient, ticket_id, secret)` | `recipient` | Claims a gift ticket with its secret before expiry. |
+| `verify_ticket(ticket_id)` | anyone | Deprecated compatibility alias for `get_ticket`. |
+| `is_ticket_valid(ticket_id)` | anyone | Returns whether a ticket is in `Valid` status. |
+| `is_valid(ticket_id, owner)` | anyone | Returns whether a ticket belongs to `owner` and is valid; lookup errors return `false`. |
+| `verify_tickets(ticket_ids)` | anyone | Reads a bounded batch of ticket records for scanners. |
+| `check_in(organizer, ticket_id)` | `organizer` | Marks one ticket used. |
+| `check_in_batch(organizer, ticket_ids)` | `organizer` | Atomically marks a bounded batch of tickets used. |
+| `revoke_ticket(organizer, ticket_id)` | `organizer` | Permanently revokes one ticket. |
+| `set_seat(organizer, ticket_id, seat)` | `organizer` | Reassigns a ticket's seat before transfer/check-in restrictions apply. |
+| `revoke_with_refund(organizer, ticket_id, refund)` | `organizer` | Revokes a ticket and optionally refunds its original price. |
+| `revoke_batch(organizer, ticket_ids)` | `organizer` | Atomically revokes a bounded batch of tickets. |
+| `list_for_resale(owner, ticket_id, price)` | `owner` | Lists an owned ticket for resale within the event's price limits. |
+| `cancel_resale(owner, ticket_id)` | `owner` | Cancels an active resale listing before the resale cutoff. |
+| `buy_resale(buyer, ticket_id)` | `buyer` | Purchases a resale listing and settles royalty plus seller proceeds. |
+| `get_event(event_id)` | anyone | Read-only event lookup. |
+| `get_ticket(ticket_id)` | anyone | Read-only ticket lookup. |
+| `extend_ticket_ttl(ticket_id)` | anyone | Renews a ticket's persistent-storage TTL; does not change ticket state. |
+| `get_organizer_events(organizer)` | anyone | Returns the number of events registered by an organizer. |
+| `token_decimals()` | anyone | Returns decimals cached for the active payment token. |
 
 > Resale cutoff semantics: once `ledger_timestamp >= starts_at - resale_cutoff_seconds`, all resale actions reject with `Error::ResaleClosed`. That policy is enforced by the contract's `resale_closed` helper and applies to `list_for_resale`, `buy_resale`, and `cancel_resale`.
 
